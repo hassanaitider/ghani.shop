@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Ghani Shop — Admin</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%230b1220'/%3E%3Ccircle cx='32' cy='32' r='12' fill='%23ffb81c'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+
+<!-- LOGIN -->
+<main class="login" id="login">
+  <form class="login__card" id="loginForm">
+    <div class="brand"><span class="brand__mark">⚡</span> <span>Ghani<b>Shop</b></span></div>
+    <h1 data-i18n="a.login.title"></h1>
+    <label><span data-i18n="a.login.pw"></span>
+      <input type="password" id="pw" autocomplete="current-password" required autofocus></label>
+    <p class="error" id="loginErr" hidden></p>
+    <button class="btn btn--primary" type="submit" data-i18n="a.login.btn"></button>
+    <div class="seg seg--center">
+      <button type="button" class="seg__b" data-lang="fr">FR</button>
+      <button type="button" class="seg__b" data-lang="en">EN</button>
+    </div>
+  </form>
+</main>
+
+<!-- DASHBOARD -->
+<div class="app" id="app" hidden>
+  <header class="top">
+    <div class="brand"><span class="brand__mark">⚡</span> <span>Ghani<b>Shop</b></span> <span class="top__title" data-i18n="a.title"></span></div>
+    <div class="top__tools">
+      <div class="seg">
+        <button type="button" class="seg__b" data-lang="fr">FR</button>
+        <button type="button" class="seg__b" data-lang="en">EN</button>
+      </div>
+      <button class="btn" id="refresh" type="button" data-i18n="a.refresh"></button>
+      <button class="btn" id="export" type="button" data-i18n="a.export"></button>
+      <button class="btn btn--dark" id="logout" type="button" data-i18n="a.logout"></button>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <section class="kpis" id="kpis"></section>
+
+    <section class="grid2">
+      <div class="panel">
+        <h2 data-i18n="a.chart.title"></h2>
+        <div id="chart" class="chart"></div>
+      </div>
+      <div class="panel">
+        <h2 data-i18n="a.regions.title"></h2>
+        <div id="regions"></div>
+      </div>
+    </section>
+
+    <section class="grid2 grid2--wide">
+      <div class="panel">
+        <h2 data-i18n="a.countries.title"></h2>
+        <div class="tablewrap">
+          <table class="table" id="countryTable">
+            <thead><tr>
+              <th data-i18n="a.col.country"></th><th data-i18n="a.col.currency"></th>
+              <th class="num" data-i18n="a.col.orders"></th><th class="num" data-i18n="a.col.local"></th><th class="num" data-i18n="a.col.eur"></th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="panel">
+        <h2 data-i18n="a.set.title"></h2>
+        <form id="settings">
+          <label class="lbl"><span data-i18n="a.set.stock"></span><input type="number" min="0" max="100000" id="stockInput"></label>
+          <div class="lbl"><span data-i18n="a.set.rates"></span></div>
+          <div class="rates" id="rates"></div>
+          <p class="muted small" data-i18n="a.set.hint"></p>
+          <button class="btn btn--primary" type="submit" data-i18n="a.set.save"></button>
+          <span class="ok" id="setOk" hidden data-i18n="a.set.saved"></span>
+        </form>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel__head">
+        <h2 data-i18n="a.orders.title"></h2>
+        <span class="muted small" id="shown"></span>
+      </div>
+      <div class="filters">
+        <input type="search" id="fSearch" data-i18n-ph="a.f.search">
+        <select id="fStatus"></select>
+        <select id="fRegion"></select>
+        <select id="fCountry"></select>
+      </div>
+      <div class="tablewrap">
+        <table class="table table--orders" id="orders">
+          <thead><tr>
+            <th data-i18n="a.col.id"></th><th data-i18n="a.col.date"></th><th data-i18n="a.col.customer"></th>
+            <th data-i18n="a.col.place"></th><th class="num" data-i18n="a.col.qty"></th><th class="num" data-i18n="a.col.total"></th><th data-i18n="a.col.status"></th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- ORDER DETAIL -->
+<dialog id="detail" class="detail">
+  <div id="detailBody"></div>
+</dialog>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="shared.js"></script>
+<script src="i18n.js"></script>
+<script src="admin.js"></script>
+</body>
+</html>

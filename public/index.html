@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ghani Shop — SolarGlow 3-en-1 Lantern</title>
+  <meta name="description" content="SolarGlow : lanterne solaire 3-en-1 (lumière, batterie externe, SOS). Paiement à la livraison. / Solar lantern, power bank & SOS. Cash on delivery.">
+  <meta name="theme-color" content="#0b1220">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%230b1220'/%3E%3Ccircle cx='32' cy='32' r='12' fill='%23ffb81c'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ========== NAV ========== -->
+<header class="nav" id="top">
+  <div class="container nav__in">
+    <a class="logo" href="#top" aria-label="Ghani Shop">
+      <span class="logo__mark" data-icon="zap"></span>
+      <span class="logo__txt">Ghani<b>Shop</b></span>
+    </a>
+    <nav class="nav__links" aria-label="Main">
+      <a href="#demo" data-i18n="nav.demo"></a>
+      <a href="#benefits" data-i18n="nav.benefits"></a>
+      <a href="#reviews" data-i18n="nav.reviews"></a>
+      <a href="#faq" data-i18n="nav.faq"></a>
+    </nav>
+    <div class="nav__tools">
+      <select id="currency" class="select select--sm" data-i18n-aria="nav.currency"></select>
+      <div class="seg" role="group" aria-label="Language">
+        <button type="button" class="seg__b" data-lang="fr">FR</button>
+        <button type="button" class="seg__b" data-lang="en">EN</button>
+      </div>
+      <a class="btn btn--primary btn--sm" href="#order" data-i18n="nav.cta"></a>
+    </div>
+  </div>
+</header>
+
+<main>
+<!-- ========== HERO ========== -->
+<section class="hero">
+  <div class="container hero__grid">
+    <div class="gallery" aria-label="Product gallery">
+      <div class="stage" id="stage"></div>
+      <div class="thumbs" id="thumbs" role="tablist"></div>
+    </div>
+
+    <div class="hero__info">
+      <span class="pill" data-i18n="hero.badge"></span>
+      <h1 data-i18n-html="hero.title"></h1>
+      <div class="rating">
+        <span class="stars" data-stars="5"></span>
+        <span class="rating__txt"><b>4.8</b> · <span id="reviewCount">1 284</span></span>
+      </div>
+      <p class="lead" data-i18n="hero.sub"></p>
+
+      <div class="pricebox">
+        <div class="pricebox__top">
+          <div>
+            <div class="muted small" data-i18n="price.today"></div>
+            <div class="price"><span data-eur="29.9"></span></div>
+          </div>
+          <div class="pricebox__was">
+            <span class="muted small" data-i18n="price.was"></span>
+            <s data-eur="79.9"></s>
+            <span class="tag tag--green" id="saveTag"></span>
+          </div>
+        </div>
+        <div class="value">
+          <div class="value__title" data-i18n="value.title"></div>
+          <div class="value__row"><span data-icon="battery"></span><span data-i18n="value.powerbank"></span><s data-eur="34.9"></s></div>
+          <div class="value__row"><span data-icon="sun"></span><span data-i18n="value.solar"></span><s data-eur="24.9"></s></div>
+          <div class="value__row"><span data-icon="zap"></span><span data-i18n="value.lamp"></span><s data-eur="20.1"></s></div>
+          <div class="value__row value__row--total"><span data-i18n="value.total"></span><s data-eur="79.9"></s></div>
+          <div class="value__row value__row--ours"><span data-i18n="value.ours"></span><b data-eur="29.9"></b></div>
+        </div>
+      </div>
+
+      <div class="stock" id="stockBox">
+        <div class="stock__head">
+          <span class="dot dot--live"></span>
+          <span id="stockText"></span>
+        </div>
+        <div class="bar"><i id="stockBar"></i></div>
+        <div class="muted small" data-i18n="stock.sub"></div>
+      </div>
+
+      <a class="btn btn--primary btn--lg btn--block" href="#order" data-i18n="hero.cta"></a>
+
+      <ul class="trust">
+        <li><span data-icon="cash"></span><span data-i18n="trust.cod"></span></li>
+        <li><span data-icon="truck"></span><span data-i18n="trust.ship"></span></li>
+        <li><span data-icon="shield"></span><span data-i18n="trust.warranty"></span></li>
+        <li><span data-icon="return"></span><span data-i18n="trust.return"></span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ========== PAIN ========== -->
+<section class="section section--dark" id="pain">
+  <div class="container">
+    <div class="head head--light">
+      <span class="eyebrow" data-i18n="pain.eyebrow"></span>
+      <h2 data-i18n="pain.title"></h2>
+    </div>
+    <div class="grid3">
+      <article class="card card--dark"><span class="ico ico--red" data-icon="moon"></span><h3 data-i18n="pain.p1.t"></h3><p data-i18n="pain.p1.d"></p></article>
+      <article class="card card--dark"><span class="ico ico--red" data-icon="phone"></span><h3 data-i18n="pain.p2.t"></h3><p data-i18n="pain.p2.d"></p></article>
+      <article class="card card--dark"><span class="ico ico--red" data-icon="dollar"></span><h3 data-i18n="pain.p3.t"></h3><p data-i18n="pain.p3.d"></p></article>
+    </div>
+    <p class="solution"><span data-icon="check"></span><span data-i18n="pain.solution"></span></p>
+  </div>
+</section>
+
+<!-- ========== DEMO (looping animations / GIFs) ========== -->
+<section class="section" id="demo">
+  <div class="container">
+    <div class="head">
+      <span class="eyebrow" data-i18n="demo.eyebrow"></span>
+      <h2 data-i18n="demo.title"></h2>
+    </div>
+    <div class="grid3" id="demoGrid"></div>
+  </div>
+</section>
+
+<!-- ========== BENEFITS ========== -->
+<section class="section section--soft" id="benefits">
+  <div class="container">
+    <div class="head">
+      <span class="eyebrow" data-i18n="ben.eyebrow"></span>
+      <h2 data-i18n="ben.title"></h2>
+    </div>
+    <div class="stats">
+      <div><b>20h</b><span data-i18n="stat.1"></span></div>
+      <div><b>10 000 mAh</b><span data-i18n="stat.2"></span></div>
+      <div><b>IP65</b><span data-i18n="stat.3"></span></div>
+      <div><b>360°</b><span data-i18n="stat.4"></span></div>
+    </div>
+    <div class="grid3">
+      <article class="card"><span class="ico" data-icon="clock"></span><h3 data-i18n="ben.1.t"></h3><p data-i18n="ben.1.d"></p></article>
+      <article class="card"><span class="ico" data-icon="battery"></span><h3 data-i18n="ben.2.t"></h3><p data-i18n="ben.2.d"></p></article>
+      <article class="card"><span class="ico" data-icon="sun"></span><h3 data-i18n="ben.3.t"></h3><p data-i18n="ben.3.d"></p></article>
+      <article class="card"><span class="ico" data-icon="drop"></span><h3 data-i18n="ben.4.t"></h3><p data-i18n="ben.4.d"></p></article>
+      <article class="card"><span class="ico" data-icon="alert"></span><h3 data-i18n="ben.5.t"></h3><p data-i18n="ben.5.d"></p></article>
+      <article class="card"><span class="ico" data-icon="shield"></span><h3 data-i18n="ben.6.t"></h3><p data-i18n="ben.6.d"></p></article>
+    </div>
+
+    <div class="proof">
+      <h3 data-i18n="proof.title"></h3>
+      <div class="proof__row"><span data-i18n="proof.sol"></span><div class="pbar"><i style="--w:100%"></i></div><b>20 h</b></div>
+      <div class="proof__row"><span data-i18n="proof.phone"></span><div class="pbar pbar--gray"><i style="--w:14%"></i></div><b>3 h</b></div>
+      <div class="proof__row"><span data-i18n="proof.can"></span><div class="pbar pbar--gray"><i style="--w:9%"></i></div><b>2 h</b></div>
+      <p class="muted small" data-i18n="proof.note"></p>
+    </div>
+
+    <div class="cmp">
+      <h3 data-i18n="cmp.title"></h3>
+      <table>
+        <thead><tr><th></th><th class="cmp__us">SolarGlow</th><th data-i18n="proof.can"></th><th data-i18n="cmp.gen"></th></tr></thead>
+        <tbody>
+          <tr><td data-i18n="cmp.f1"></td><td class="y" data-icon="check"></td><td class="n" data-icon="x"></td><td class="y" data-icon="check"></td></tr>
+          <tr><td data-i18n="cmp.f2"></td><td class="y" data-icon="check"></td><td class="n" data-icon="x"></td><td class="y" data-icon="check"></td></tr>
+          <tr><td data-i18n="cmp.f3"></td><td class="y" data-icon="check"></td><td class="y" data-icon="check"></td><td class="n" data-icon="x"></td></tr>
+          <tr><td data-i18n="cmp.f4"></td><td class="y" data-icon="check"></td><td class="n" data-icon="x"></td><td class="y" data-icon="check"></td></tr>
+          <tr><td data-i18n="cmp.f5"></td><td class="y" data-icon="check"></td><td class="y" data-icon="check"></td><td class="n" data-icon="x"></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ========== REVIEWS ========== -->
+<section class="section" id="reviews">
+  <div class="container">
+    <div class="head">
+      <span class="eyebrow" data-i18n="rev.eyebrow"></span>
+      <h2 data-i18n="rev.title"></h2>
+    </div>
+    <div class="grid3">
+      <figure class="review"><span class="stars" data-stars="5"></span><blockquote data-i18n="rev.1"></blockquote><figcaption><span class="avatar">S</span><span><b>Sandrine M.</b><small>Douala 🇨🇲 · <em data-i18n="rev.verified"></em></small></span></figcaption></figure>
+      <figure class="review"><span class="stars" data-stars="5"></span><blockquote data-i18n="rev.2"></blockquote><figcaption><span class="avatar">K</span><span><b>Kwame A.</b><small>Accra 🇬🇭 · <em data-i18n="rev.verified"></em></small></span></figcaption></figure>
+      <figure class="review"><span class="stars" data-stars="5"></span><blockquote data-i18n="rev.3"></blockquote><figcaption><span class="avatar">M</span><span><b>Marek T.</b><small>Kraków 🇵🇱 · <em data-i18n="rev.verified"></em></small></span></figcaption></figure>
+    </div>
+    <p class="muted small center" data-i18n="rev.sample"></p>
+  </div>
+</section>
+
+<!-- ========== FAQ ========== -->
+<section class="section section--soft" id="faq">
+  <div class="container container--narrow">
+    <div class="head">
+      <span class="eyebrow" data-i18n="faq.eyebrow"></span>
+      <h2 data-i18n="faq.title"></h2>
+    </div>
+    <div class="faq" id="faqList">
+      <div class="faq__item"><button type="button" class="faq__q" aria-expanded="false"><span data-i18n="faq.1.q"></span><i data-icon="plus"></i></button><div class="faq__a"><p data-i18n="faq.1.a"></p></div></div>
+      <div class="faq__item"><button type="button" class="faq__q" aria-expanded="false"><span data-i18n="faq.2.q"></span><i data-icon="plus"></i></button><div class="faq__a"><p data-i18n="faq.2.a"></p></div></div>
+      <div class="faq__item"><button type="button" class="faq__q" aria-expanded="false"><span data-i18n="faq.3.q"></span><i data-icon="plus"></i></button><div class="faq__a"><p data-i18n="faq.3.a"></p></div></div>
+      <div class="faq__item"><button type="button" class="faq__q" aria-expanded="false"><span data-i18n="faq.4.q"></span><i data-icon="plus"></i></button><div class="faq__a"><p data-i18n="faq.4.a"></p></div></div>
+      <div class="faq__item"><button type="button" class="faq__q" aria-expanded="false"><span data-i18n="faq.5.q"></span><i data-icon="plus"></i></button><div class="faq__a"><p data-i18n="faq.5.a"></p></div></div>
+      <div class="faq__item"><button type="button" class="faq__q" aria-expanded="false"><span data-i18n="faq.6.q"></span><i data-icon="plus"></i></button><div class="faq__a"><p data-i18n="faq.6.a"></p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== CROSS-SELL ========== -->
+<section class="section" id="cross">
+  <div class="container">
+    <div class="head">
+      <span class="eyebrow" data-i18n="cross.eyebrow"></span>
+      <h2 data-i18n="cross.title"></h2>
+    </div>
+    <div class="grid3" id="crossGrid"></div>
+  </div>
+</section>
+
+<!-- ========== ORDER ========== -->
+<section class="section section--order" id="order">
+  <div class="container container--narrow">
+    <div class="head">
+      <span class="eyebrow" data-i18n="order.eyebrow"></span>
+      <h2 data-i18n="order.title"></h2>
+      <p class="muted" data-i18n="order.sub"></p>
+    </div>
+
+    <div class="order" id="orderWrap">
+      <form id="orderForm" novalidate autocomplete="on">
+        <div class="bundles" id="bundles"></div>
+
+        <div class="qty">
+          <span data-i18n="qty.label"></span>
+          <div class="stepper">
+            <button type="button" id="qtyMinus" aria-label="-">−</button>
+            <output id="qtyVal">1</output>
+            <button type="button" id="qtyPlus" aria-label="+">+</button>
+          </div>
+        </div>
+
+        <div class="fields">
+          <label class="field"><span data-i18n="f.name"></span>
+            <input name="name" required maxlength="80" autocomplete="name"><em class="err" data-i18n="f.err"></em></label>
+          <label class="field"><span data-i18n="f.country"></span>
+            <select name="country" required autocomplete="country"></select><em class="err" data-i18n="f.err"></em></label>
+          <label class="field"><span data-i18n="f.phone"></span>
+            <div class="phone"><i id="dial">+</i><input name="phone" type="tel" inputmode="tel" required maxlength="20" autocomplete="tel-national"></div><em class="err" data-i18n="f.err"></em></label>
+          <label class="field"><span data-i18n="f.city"></span>
+            <input name="city" required maxlength="80" autocomplete="address-level2"><em class="err" data-i18n="f.err"></em></label>
+          <label class="field field--full"><span data-i18n="f.address"></span>
+            <input name="address" required maxlength="200" autocomplete="street-address"><em class="err" data-i18n="f.err"></em></label>
+          <label class="field"><span data-i18n="f.email"></span>
+            <input name="email" type="email" maxlength="100" autocomplete="email"><em class="err" data-i18n="f.err"></em></label>
+          <label class="field"><span data-i18n="f.note"></span>
+            <input name="note" maxlength="300" data-i18n-ph="f.note.ph"></label>
+          <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+        </div>
+
+        <div class="summary" id="summary" aria-live="polite"></div>
+
+        <p class="formerr" id="formErr" role="alert" hidden></p>
+        <button class="btn btn--primary btn--lg btn--block" id="submitBtn" type="submit" data-i18n="order.submit"></button>
+        <p class="cod muted small"><span data-icon="cash"></span><span data-i18n="order.cod"></span></p>
+      </form>
+
+      <div class="confirm" id="confirm" hidden>
+        <div class="confirm__check" data-icon="check"></div>
+        <h3 data-i18n="ok.title"></h3>
+        <p id="okMsg"></p>
+        <dl class="confirm__dl">
+          <div><dt data-i18n="ok.id"></dt><dd id="okId"></dd></div>
+          <div><dt data-i18n="ok.total"></dt><dd id="okTotal"></dd></div>
+        </dl>
+        <button class="btn btn--ghost" id="again" type="button" data-i18n="ok.again"></button>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="footer">
+  <div class="container footer__in">
+    <span class="logo__txt">Ghani<b>Shop</b></span>
+    <span class="muted small">© <span id="year"></span> Ghani Shop — <span data-i18n="foot.rights"></span></span>
+    <a class="small" href="admin.html" data-i18n="foot.admin"></a>
+  </div>
+</footer>
+
+<a class="sticky" href="#order"><span data-i18n="sticky.cta"></span> · <b data-eur="29.9"></b></a>
+
+<script src="shared.js"></script>
+<script src="i18n.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
