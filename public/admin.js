@@ -513,10 +513,21 @@
     const c = findCountry(code) || { currency: 'EUR' };
     return Object.assign(GS.defaultProduct(c.currency, S.rates), {
       id: '', name: '', rich: false, stock: 0, categoryId: '', description: '', image: '', gallery: [], colorOptions: false,
+      nameFr: '', descriptionFr: '', imageFr: '', galleryFr: [],
       sizesEnabled: false, sizes: ['S', 'M', 'L', 'XL'], bundles: [], crossSellIds: [], landing: [], active: true
     });
   }
   function copyDraft(p) { return JSON.parse(JSON.stringify(p)); }
+  // French version: only for francophone countries (their product pages are shown in French)
+  function draftCode() { const f = $('#pform'); return (f && f.elements.countryCode && f.elements.countryCode.value) || (S.editingProduct && S.editingProduct.code) || ''; }
+  function isFr() { return GS.isFrancophone(draftCode()); }
+  function normFr() {
+    if (!draft) return;
+    draft.nameFr = draft.nameFr || ''; draft.descriptionFr = draft.descriptionFr || ''; draft.imageFr = draft.imageFr || '';
+    draft.galleryFr = Array.isArray(draft.galleryFr) ? draft.galleryFr : [];
+    while (draft.galleryFr.length < draft.gallery.length) draft.galleryFr.push('');
+    draft.galleryFr.length = draft.gallery.length;
+  }
 
   // upload one file from this computer; the server keeps it on the persistent disk
   function uploadFile(file) {
@@ -539,9 +550,13 @@
     files.reduce(function (chain, file) {
       return chain.then(function () {
         return uploadFile(file).then(function (url) {
+          normFr();
           if (target.kind === 'primary') draft.image = url;
-          else if (target.kind === 'gallery') { if (draft.gallery.length < 8) draft.gallery.push(url); }
+          else if (target.kind === 'gallery') { if (draft.gallery.length < 8) { draft.gallery.push(url); draft.galleryFr.push(''); } }
           else if (target.kind === 'block' && draft.landing[target.index]) draft.landing[target.index].media = url;
+          else if (target.kind === 'primaryFr') draft.imageFr = url;
+          else if (target.kind === 'galleryFr' && draft.gallery[target.index]) draft.galleryFr[target.index] = url;
+          else if (target.kind === 'blockFr' && draft.landing[target.index]) draft.landing[target.index].mediaFr = url;
         });
       });
     }, Promise.resolve()).then(function () { renderMediaEditor(); renderBlocksEditor(); toast(t('a.m.uploaded')); })
@@ -560,6 +575,25 @@
       '<div class="mgal">' + draft.gallery.map(function (u, i) {
         return '<div class="mthumb">' + '<img src="' + esc(u) + '" alt=""><button type="button" class="mthumb__x" data-act="rmGallery" data-i="' + i + '" aria-label="remove">×</button></div>';
       }).join('') + (draft.gallery.length < 8 ? '<button type="button" class="mthumb mthumb--add" data-act="pickGallery">＋<small>' + t('a.m.addImages') + '</small></button>' : '') + '</div>';
+    renderFrMedia();
+  }
+  // French versions of the images (francophone countries only): upload one, or let Gemini translate the text inside the original
+  function frButtons(kind, i, src, fr) {
+    return '<button type="button" class="btn btn--sm" data-act="pickFr" data-k="' + kind + '" data-i="' + i + '">' + (fr ? t('a.m.replace') : t('a.m.upload')) + '</button> ' +
+      (src ? '<button type="button" class="btn btn--sm btn--primary" data-act="trImg" data-k="' + kind + '" data-i="' + i + '">' + t('a.fr.trImg') + '</button> ' : '') +
+      (fr ? '<button type="button" class="btn btn--sm btn--danger" data-act="rmFr" data-k="' + kind + '" data-i="' + i + '">' + t('a.m.remove') + '</button>' : '');
+  }
+  function renderFrMedia() {
+    const el = $('#mMediaFr'); if (!el) return;
+    el.hidden = !isFr();
+    if (el.hidden || !draft) { el.innerHTML = ''; return; }
+    normFr();
+    let h = '<h4>' + t('a.fr.media') + '</h4><div class="mrow">' + thumb(draft.imageFr) + '<div class="mact"><b>' + t('a.m.primary') + '</b><div>' + frButtons('primary', 0, draft.image, draft.imageFr) + '</div></div></div>';
+    draft.gallery.forEach(function (u, i) {
+      h += '<div class="mrow"><div class="mthumb"><img src="' + esc(u) + '" alt=""></div>' + thumb(draft.galleryFr[i]) +
+        '<div class="mact"><b>#' + (i + 1) + '</b><div>' + frButtons('gallery', i, u, draft.galleryFr[i]) + '</div></div></div>';
+    });
+    el.innerHTML = h;
   }
   function renderBundlesEditor() {
     if (!draft) return;
@@ -588,6 +622,9 @@
         (b.media ? ' <button type="button" class="btn btn--sm btn--danger" data-act="rmBlockMedia" data-i="' + i + '">' + t('a.m.remove') + '</button>' : '') + '</div></div>' +
         '<div class="lrow__text"><label class="fld"><span>' + t('a.m.landing.heading') + '</span><input maxlength="120" data-l="title" value="' + esc(b.title) + '"></label>' +
         '<label class="fld"><span>' + t('a.m.landing.text') + '</span><textarea maxlength="1500" data-l="text">' + esc(b.text) + '</textarea></label></div>' +
+        (isFr() ? '<div class="lrow__fr"><b>' + t('a.fr.badge') + '</b><div class="lrow__frmedia">' + thumb(b.mediaFr) + '<div>' + frButtons('block', i, b.media, b.mediaFr) + '</div></div>' +
+          '<label class="fld"><span>' + t('a.m.landing.heading') + '</span><input maxlength="120" data-l="titleFr" value="' + esc(b.titleFr || '') + '"></label>' +
+          '<label class="fld"><span>' + t('a.m.landing.text') + '</span><textarea maxlength="1500" data-l="textFr">' + esc(b.textFr || '') + '</textarea></label></div>' : '') +
         '<div class="lrow__act"><button type="button" class="btn btn--sm" data-act="upBlock" data-i="' + i + '"' + (i === 0 ? ' disabled' : '') + '>↑</button>' +
         '<button type="button" class="btn btn--sm" data-act="downBlock" data-i="' + i + '"' + (i === draft.landing.length - 1 ? ' disabled' : '') + '>↓</button>' +
         '<button type="button" class="btn btn--sm btn--danger" data-act="rmBlock" data-i="' + i + '">×</button></div></div>';
@@ -603,6 +640,61 @@
     $$('#mBlocks [data-lrow]').forEach(function (row) {
       const b = draft.landing[Number(row.dataset.lrow)]; if (!b) return;
       b.title = row.querySelector('[data-l=title]').value; b.text = row.querySelector('[data-l=text]').value;
+      const tf = row.querySelector('[data-l=titleFr]'), xf = row.querySelector('[data-l=textFr]');
+      if (tf) b.titleFr = tf.value;
+      if (xf) b.textFr = xf.value;
+    });
+    const nf = $('#nameFr'), df = $('#descFr');
+    if (nf) draft.nameFr = nf.value;
+    if (df) draft.descriptionFr = df.value;
+  }
+
+  function trError(e) {
+    const m = e && e.message;
+    toast(t(m === 'no_anthropic_key' ? 'a.fr.noAnthropic' : m === 'no_gemini_key' ? 'a.fr.noGemini' : m === 'gif' ? 'a.fr.gif' : 'a.fr.err'));
+  }
+  // fills the empty French text fields with a Claude translation of the originals
+  function translateTexts(btn) {
+    syncDraft();
+    const slots = [];
+    const add = function (src, cur, set) { if (String(src || '').trim() && !String(cur || '').trim()) slots.push({ src: src, set: set }); };
+    const f = $('#pform').elements;
+    add(f.name.value, draft.nameFr, function (v) { draft.nameFr = v; });
+    add(f.description.value, draft.descriptionFr, function (v) { draft.descriptionFr = v; });
+    draft.landing.forEach(function (x) {
+      add(x.title, x.titleFr, function (v) { x.titleFr = v; });
+      add(x.text, x.textFr, function (v) { x.textFr = v; });
+    });
+    if (!slots.length) { toast(t('a.fr.nothing')); return; }
+    btn.disabled = true; toast(t('a.fr.translating'));
+    api('POST', '/api/admin/translate', { items: slots.map(function (x) { return x.src; }) }).then(function (d) {
+      if (!draft) return;
+      slots.forEach(function (x, n) { x.set(d.items[n]); });
+      $('#nameFr').value = draft.nameFr; $('#descFr').value = draft.descriptionFr;
+      renderBlocksEditor(); toast(t('a.fr.done'));
+    }).catch(trError).then(function () { btn.disabled = false; });
+  }
+  // asks Gemini to redraw each image with its English text translated to French (one at a time)
+  function translateImages(btn, jobs) {
+    syncDraft(); normFr();
+    const srcOf = function (j) { return j.k === 'primary' ? draft.image : j.k === 'gallery' ? draft.gallery[j.i] : (draft.landing[j.i] || {}).media; };
+    const todo = jobs.filter(srcOf);
+    if (!todo.length) { toast(t('a.fr.nothing')); return Promise.resolve(); }
+    btn.disabled = true;
+    let done = 0, failed = null;
+    return todo.reduce(function (chain, j) {
+      return chain.then(function () {
+        if (!draft) return;
+        toast(t('a.fr.translatingImg', { n: done + 1, total: todo.length }));
+        return api('POST', '/api/admin/translate-image', { url: srcOf(j) }).then(function (d) {
+          if (!draft) return;
+          if (j.k === 'primary') draft.imageFr = d.url; else if (j.k === 'gallery') draft.galleryFr[j.i] = d.url; else draft.landing[j.i].mediaFr = d.url;
+          done++; syncDraft(); renderMediaEditor(); renderBlocksEditor();
+        }).catch(function (e) { failed = failed || e; });
+      });
+    }, Promise.resolve()).then(function () {
+      btn.disabled = false;
+      if (failed) trError(failed); else toast(t('a.fr.doneImg', { n: done }));
     });
   }
 
@@ -631,7 +723,12 @@
       num(t('a.prod.price') + ' (<b id="pcur">' + esc(c.currency) + '</b>)', 'price', base.price, 'any') + num(t('a.prod.compare'), 'compare', base.compare, 'any') +
       num(t('a.prod.shipping'), 'shipping', base.shipping, 'any') + num(t('a.prod.free'), 'freeShippingQty', base.freeShippingQty, '1') +
       num(t('a.prod.stock'), 'stock', base.stock, '1') + '</form>' +
-      section(t('a.m.media'), 'a.m.media.hint', '<div class="mbox" id="mMedia" data-f="image"></div>') +
+      '<section class="msec msec--fr" id="frSec" hidden><h3>🇫🇷 ' + t('a.fr.title') + '</h3><p class="muted small">' + t('a.fr.hint') + '</p>' +
+        '<div class="fr__act"><button type="button" class="btn btn--sm btn--primary" data-act="trTexts">' + t('a.fr.trTexts') + '</button> ' +
+        '<button type="button" class="btn btn--sm btn--primary" data-act="trAllImgs">' + t('a.fr.trAllImgs') + '</button></div>' +
+        '<label class="fld fld--full"><span>' + t('a.prod.name') + ' (FR)</span><input id="nameFr" maxlength="80" value="' + esc(base.nameFr || '') + '"></label>' +
+        '<label class="fld fld--full"><span>' + t('a.prod.desc') + ' (FR)</span><textarea id="descFr" maxlength="2000">' + esc(base.descriptionFr || '') + '</textarea></label></section>' +
+      section(t('a.m.media'), 'a.m.media.hint', '<div class="mbox" id="mMedia" data-f="image"></div><div class="mbox mbox--fr" id="mMediaFr" hidden></div>') +
       section(t('a.m.variants'), null,
         '<div class="vgrid"><label class="fld fld--check"><input type="checkbox" id="sizesOn"' + (base.sizesEnabled ? ' checked' : '') + '><span>' + t('a.m.sizes.enable') + '</span></label>' +
         '<label class="fld"><span>' + t('a.m.sizes.list') + '</span><input id="sizesList" maxlength="80" value="' + esc(base.sizes.join(', ')) + '"' + (base.sizesEnabled ? '' : ' disabled') + ' data-f="sizes"></label>' +
@@ -642,6 +739,7 @@
       '<p class="muted small">' + t('a.prod.hint', { cur: esc(c.currency) }) + '</p>' +
       '<div class="d__actions"><button class="btn btn--primary" type="button" data-act="saveProduct">' + t('a.prod.save') + '</button>' +
       (p ? '<button class="btn btn--danger" type="button" data-act="delProduct">' + t('a.prod.delete') + '</button>' : '') + '</div></div>';
+    normFr(); $('#frSec').hidden = !isFr();
     renderMediaEditor(); renderBundlesEditor(); renderCrossEditor(ref.code); renderBlocksEditor();
     const dlg = $('#pdlg'); if (!dlg.open) dlg.showModal();
   }
@@ -656,6 +754,7 @@
       $('#pcur').textContent = c ? c.currency : '';
       draft.crossSellIds = [];
       renderCrossEditor(code);
+      $('#frSec').hidden = !isFr(); renderMediaEditor(); renderBlocksEditor();
       if (c && S.editingProduct && !S.editingProduct.id) {
         const d = GS.defaultProduct(c.currency, S.rates);
         f.price.value = d.price; f.compare.value = d.compare; f.shipping.value = d.shipping;
@@ -675,11 +774,24 @@
     const act = b.dataset.act, ref = S.editingProduct, i = Number(b.dataset.i);
     if (act === 'close') { dlg.close(); return; }
     if (!draft) return;
-    const edit = function (fn) { syncDraft(); fn(); renderMediaEditor(); renderBundlesEditor(); renderBlocksEditor(); };
+    const edit = function (fn) { syncDraft(); normFr(); fn(); normFr(); renderMediaEditor(); renderBundlesEditor(); renderBlocksEditor(); };
+    const frSet = function (k, n, u) { if (k === 'primary') draft.imageFr = u; else if (k === 'gallery') draft.galleryFr[n] = u; else draft.landing[n].mediaFr = u; };
+    if (act === 'pickFr') return pickFiles({ kind: b.dataset.k === 'primary' ? 'primaryFr' : b.dataset.k === 'gallery' ? 'galleryFr' : 'blockFr', index: i }, false);
+    if (act === 'rmFr') return edit(function () { frSet(b.dataset.k, i, ''); });
+    if (act === 'trTexts') return translateTexts(b);
+    if (act === 'trImg') return translateImages(b, [{ k: b.dataset.k, i: i }]);
+    if (act === 'trAllImgs') {
+      syncDraft(); normFr();
+      const jobs = [];
+      if (draft.image && !draft.imageFr) jobs.push({ k: 'primary', i: 0 });
+      draft.gallery.forEach(function (u, n) { if (u && !draft.galleryFr[n]) jobs.push({ k: 'gallery', i: n }); });
+      draft.landing.forEach(function (x, n) { if (x.media && !x.mediaFr) jobs.push({ k: 'block', i: n }); });
+      return translateImages(b, jobs);
+    }
     if (act === 'pickPrimary') return pickFiles({ kind: 'primary' }, false);
     if (act === 'rmPrimary') return edit(function () { draft.image = ''; });
     if (act === 'pickGallery') return pickFiles({ kind: 'gallery' }, true);
-    if (act === 'rmGallery') return edit(function () { draft.gallery.splice(i, 1); });
+    if (act === 'rmGallery') return edit(function () { draft.gallery.splice(i, 1); draft.galleryFr.splice(i, 1); });
     if (act === 'addBundle') return edit(function () { draft.bundles.push({ qty: draft.bundles.length ? Number(draft.bundles[draft.bundles.length - 1].qty) + 1 : 2, off: 10, label: '' }); });
     if (act === 'rmBundle') return edit(function () { draft.bundles.splice(i, 1); });
     if (act === 'addBlock') return edit(function () { draft.landing.push({ title: '', text: '', media: '' }); });
@@ -697,6 +809,7 @@
       const f = $('#pform').elements;
       const body = {
         categoryId: f.categoryId.value, name: f.name.value, description: f.description.value, active: f.active.checked,
+        nameFr: draft.nameFr || '', descriptionFr: draft.descriptionFr || '', imageFr: draft.imageFr || '', galleryFr: draft.galleryFr || [],
         image: draft.image, gallery: draft.gallery, colorOptions: $('#colorsOn').checked, sizesEnabled: $('#sizesOn').checked, sizes: $('#sizesList').value,
         bundles: draft.bundles.map(function (x) { return { qty: x.qty, off: x.off, label: x.label }; }), crossSellIds: draft.crossSellIds, landing: draft.landing,
         price: f.price.value, compare: f.compare.value, shipping: f.shipping.value, freeShippingQty: f.freeShippingQty.value, stock: f.stock.value

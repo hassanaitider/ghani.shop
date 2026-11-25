@@ -362,6 +362,22 @@ window.I18N = {
     'a.m.landing.heading': 'Titre',
     'a.m.landing.text': 'Texte',
     'a.m.published': 'Publié (visible sur la boutique)',
+    'a.fr.title': 'Version française',
+    'a.fr.hint': 'Affichée dans les pays francophones à la place de l’original. Les pays anglophones ne changent pas.',
+    'a.fr.badge': '🇫🇷 Version française',
+    'a.fr.media': 'Images en français (texte dans l’image)',
+    'a.fr.trTexts': 'Traduire les textes (Claude)',
+    'a.fr.trImg': 'Traduire l’image (Gemini)',
+    'a.fr.trAllImgs': 'Traduire toutes les images (Gemini)',
+    'a.fr.translating': 'Traduction en cours…',
+    'a.fr.translatingImg': 'Image {n}/{total}…',
+    'a.fr.done': 'Textes traduits. Vérifiez puis enregistrez.',
+    'a.fr.doneImg': '{n} image(s) traduite(s). Vérifiez puis enregistrez.',
+    'a.fr.nothing': 'Rien à traduire',
+    'a.fr.noAnthropic': 'Clé ANTHROPIC_API_KEY manquante sur le serveur',
+    'a.fr.noGemini': 'Clé GEMINI_API_KEY manquante sur le serveur',
+    'a.fr.gif': 'Un GIF animé ne peut pas être traduit : importez une version française',
+    'a.fr.err': 'La traduction a échoué, réessayez',
     'a.m.preview': 'Voir la page'
   },
 
@@ -727,6 +743,22 @@ window.I18N = {
     'a.m.landing.heading': 'Heading',
     'a.m.landing.text': 'Text',
     'a.m.published': 'Published (visible on the storefront)',
+    'a.fr.title': 'French version',
+    'a.fr.hint': 'Shown in francophone countries instead of the original. English-speaking countries are unchanged.',
+    'a.fr.badge': '🇫🇷 French version',
+    'a.fr.media': 'French images (text inside the image)',
+    'a.fr.trTexts': 'Translate texts (Claude)',
+    'a.fr.trImg': 'Translate image (Gemini)',
+    'a.fr.trAllImgs': 'Translate all images (Gemini)',
+    'a.fr.translating': 'Translating…',
+    'a.fr.translatingImg': 'Image {n}/{total}…',
+    'a.fr.done': 'Texts translated. Review, then save.',
+    'a.fr.doneImg': '{n} image(s) translated. Review, then save.',
+    'a.fr.nothing': 'Nothing to translate',
+    'a.fr.noAnthropic': 'ANTHROPIC_API_KEY is not set on the server',
+    'a.fr.noGemini': 'GEMINI_API_KEY is not set on the server',
+    'a.fr.gif': 'An animated GIF cannot be translated: upload a French version',
+    'a.fr.err': 'Translation failed, try again',
     'a.m.preview': 'View page'
   }
 };
@@ -757,5 +789,13 @@ window.i18n = (function () {
     apply();
     document.dispatchEvent(new CustomEvent('langchange', { detail: lang }));
   }
-  return { t: t, apply: apply, set: set, get: function () { return lang; } };
+  // A francophone country opens in French (an English-speaking visitor can still switch; the choice then sticks for the visit).
+  function forCountry(l) {
+    let manual = false;
+    try { manual = !!sessionStorage.getItem('gs_lang_manual'); } catch (e) { /* ignore */ }
+    if (manual || l !== 'fr' || lang === 'fr') return;
+    lang = 'fr'; apply();
+    document.dispatchEvent(new CustomEvent('langchange', { detail: lang }));
+  }
+  return { t: t, apply: apply, set: set, forCountry: forCountry, get: function () { return lang; } };
 })();

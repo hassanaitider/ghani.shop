@@ -52,7 +52,7 @@
       if (r.status === 404) { location.replace('/'); throw new Error('unknown country'); }
       return r.json();
     }).then(function (c) {
-      S.country = c.country; S.categories = c.categories; S.products = c.products; S.rates = c.rates || {};
+      S.country = c.country; i18n.forCountry(c.country.lang); S.categories = c.categories; S.products = c.products; S.rates = c.rates || {};
       if (S.cat && !S.categories.some(function (x) { return x.id === S.cat; })) S.cat = null;
       render();
     }).catch(function () { /* keep what is on screen */ });

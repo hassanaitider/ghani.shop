@@ -148,13 +148,21 @@ startupSync();
 collectGarbage();
 
 function publicCountry(c) {
-  return { code: c.code, slug: c.slug, en: c.en, fr: c.fr, flag: c.flag || flagOf(c.code), currency: c.currency, dial: c.dial, region: c.region };
+  return { code: c.code, slug: c.slug, en: c.en, fr: c.fr, flag: c.flag || flagOf(c.code), currency: c.currency, dial: c.dial, region: c.region, lang: GS.isFrancophone(c.code) ? 'fr' : 'en' };
 }
 function publicCategory(c) { return { id: c.id, en: c.en, fr: c.fr }; }
+// In a francophone country the French version of each field is shown when it exists; other countries keep the original text and images.
 function publicProduct(p) {
+  const fr = GS.isFrancophone(p.countryCode);
+  const gal = p.gallery || [], galFr = p.galleryFr || [];
   return {
-    id: p.id, name: p.name, description: p.description, image: p.image, colorOptions: p.colorOptions, rich: p.rich, categoryId: p.categoryId,
-    gallery: p.gallery, sizesEnabled: p.sizesEnabled, sizes: p.sizes, bundles: p.bundles, crossSellIds: p.crossSellIds, landing: p.landing,
+    id: p.id, name: fr ? (p.nameFr || p.name) : p.name, description: fr ? (p.descriptionFr || p.description) : p.description,
+    image: fr ? (p.imageFr || p.image) : p.image, colorOptions: p.colorOptions, rich: p.rich, categoryId: p.categoryId,
+    gallery: fr ? gal.map(function (u, i) { return galFr[i] || u; }) : gal,
+    sizesEnabled: p.sizesEnabled, sizes: p.sizes, bundles: p.bundles, crossSellIds: p.crossSellIds,
+    landing: (p.landing || []).map(function (x) {
+      return fr ? { title: x.titleFr || x.title, text: x.textFr || x.text, media: x.mediaFr || x.media } : { title: x.title, text: x.text, media: x.media };
+    }),
     price: p.price, compare: p.compare, shipping: p.shipping, freeShippingQty: p.freeShippingQty, stock: p.stock
   };
 }
@@ -231,7 +239,10 @@ function imageExt(b) {
 function collectGarbage() {
   const keep = new Set();
   const add = function (u) { const m = typeof u === 'string' && u.match(/^\/uploads\/([a-f0-9]{24}\.\w+)$/); if (m) keep.add(m[1]); };
-  db.products.forEach(function (p) { add(p.image); (p.gallery || []).forEach(add); (p.landing || []).forEach(function (x) { add(x.media); }); });
+  db.products.forEach(function (p) {
+    add(p.image); add(p.imageFr); (p.gallery || []).forEach(add); (p.galleryFr || []).forEach(add);
+    (p.landing || []).forEach(function (x) { add(x.media); add(x.mediaFr); });
+  });
   const cutoff = Date.now() - 24 * 3600 * 1000;
   try {
     fs.readdirSync(UPLOAD_DIR).forEach(function (f) {
@@ -247,6 +258,79 @@ function clean(v, max) {
 // like clean(), but keeps line breaks (product descriptions)
 function cleanText(v, max) {
   return String(v == null ? '' : v).replace(/\r\n?/g, '\n').replace(/[\u0000-\u0009\u000b-\u001f\u007f]/g, ' ').trim().slice(0, max);
+}
+/* ---------- French translation (Claude for text, Gemini for text inside images) ---------- */
+async function translateTexts(items) {
+  const idx = [], src = [];
+  items.forEach(function (s, i) { if (s.trim()) { idx.push(i); src.push(s); } });
+  const out = items.slice();
+  if (!src.length) return out;
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify({
+      model: process.env.TRANSLATE_MODEL || 'claude-haiku-5-5',
+      max_tokens: 8000,
+      system: 'You translate e-commerce product copy (names, descriptions, landing-page headings and paragraphs) into natural, persuasive French for customers in francophone Africa and France. ' +
+        'Keep numbers, units, brand and model names unchanged, keep line breaks, and do not add or remove anything. ' +
+        'Reply with ONLY a JSON array of strings: the translations, in the same order and with the same length as the input array.',
+      messages: [{ role: 'user', content: JSON.stringify(src) }]
+    }),
+    signal: AbortSignal.timeout(60000)
+  });
+  if (!r.ok) throw new Error('anthropic ' + r.status);
+  const data = await r.json();
+  const text = ((data.content || []).find(function (c) { return c.type === 'text'; }) || {}).text || '';
+  const m = text.match(/\[[\s\S]*\]/);
+  const arr = m ? JSON.parse(m[0]) : null;
+  if (!Array.isArray(arr) || arr.length !== src.length) throw new Error('bad translation shape');
+  arr.forEach(function (s, k) { out[idx[k]] = String(s); });
+  return out;
+}
+async function loadImageBytes(u) {
+  let m;
+  if ((m = u.match(/^\/uploads\/([a-f0-9]{24}\.\w+)$/))) return fs.readFileSync(path.join(UPLOAD_DIR, m[1]));
+  if (u.startsWith('/media/')) {
+    const fp = path.join(PUBLIC, path.normalize(u));
+    if (!fp.startsWith(path.join(PUBLIC, 'media'))) throw new Error('bad path');
+    return fs.readFileSync(fp);
+  }
+  const r = await fetch(u, { signal: AbortSignal.timeout(20000) });
+  if (!r.ok) throw new Error('download ' + r.status);
+  const buf = Buffer.from(await r.arrayBuffer());
+  if (buf.length > MAX_UPLOAD) throw new Error('too large');
+  return buf;
+}
+async function translateImage(u) {
+  const buf = await loadImageBytes(u);
+  const ext = imageExt(buf);
+  if (!ext) throw new Error('unsupported image');
+  if (ext === 'gif') { const e = new Error('gif'); e.code = 'gif'; throw e; } // an animation cannot be redrawn
+  const mime = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp' }[ext];
+  const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + (process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image') + ':generateContent', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY },
+    body: JSON.stringify({
+      contents: [{ parts: [
+        { text: 'Edit this product image: translate every piece of English text in it into French. Keep the exact same layout, fonts, colors, product, photos and style; ' +
+          'change only the wording of the text. Text that is already French, numbers and brand names stay as they are. Return the edited image.' },
+        { inline_data: { mime_type: mime, data: buf.toString('base64') } }
+      ] }],
+      generationConfig: { responseModalities: ['IMAGE'] }
+    }),
+    signal: AbortSignal.timeout(120000)
+  });
+  if (!r.ok) throw new Error('gemini ' + r.status);
+  const data = await r.json();
+  const parts = (((data.candidates || [])[0] || {}).content || {}).parts || [];
+  const img = parts.find(function (p) { return (p.inlineData || p.inline_data || {}).data; });
+  if (!img) throw new Error('no image returned');
+  const out = Buffer.from((img.inlineData || img.inline_data).data, 'base64');
+  const oext = imageExt(out);
+  if (!oext) throw new Error('bad image returned');
+  const name = crypto.randomBytes(12).toString('hex') + '.' + oext;
+  fs.writeFileSync(path.join(UPLOAD_DIR, name), out);
+  return '/uploads/' + name;
 }
 // Behind Render's proxy every connection comes from the proxy, so the real client is in X-Forwarded-For.
 function clientIp(req) {
@@ -474,10 +558,20 @@ function readProduct(b, existing, countryCode) {
   if (!validMedia(image)) errors.image = 1; else out.image = image;
   out.colorOptions = b.colorOptions !== undefined ? !!b.colorOptions : !!src.colorOptions;
 
+  // French version (shown in francophone countries only)
+  out.nameFr = b.nameFr !== undefined ? clean(b.nameFr, 80) : (src.nameFr || '');
+  out.descriptionFr = b.descriptionFr !== undefined ? cleanText(b.descriptionFr, 2000) : (src.descriptionFr || '');
+  const imageFr = b.imageFr !== undefined ? clean(b.imageFr, 500) : (src.imageFr || '');
+  if (!validMedia(imageFr)) errors.imageFr = 1; else out.imageFr = imageFr;
+
   // extra gallery images / GIFs
   const gallery = b.gallery !== undefined ? b.gallery : (src.gallery || []);
   if (!Array.isArray(gallery) || gallery.length > 8 || !gallery.every(function (u) { return typeof u === 'string' && u && validMedia(u); })) errors.gallery = 1;
   else out.gallery = gallery.slice();
+  // French versions of the gallery images, in the same order ('' = use the original)
+  const galleryFr = b.galleryFr !== undefined ? b.galleryFr : (src.galleryFr || []);
+  if (!Array.isArray(galleryFr) || !galleryFr.every(function (u) { return typeof u === 'string' && validMedia(u); })) errors.galleryFr = 1;
+  else out.galleryFr = Array.from({ length: (out.gallery || []).length }, function (_, i) { return galleryFr[i] || ''; });
 
   // size variants (S, M, L, XL …)
   out.sizesEnabled = b.sizesEnabled !== undefined ? !!b.sizesEnabled : !!src.sizesEnabled;
@@ -516,9 +610,12 @@ function readProduct(b, existing, countryCode) {
   else {
     const blocks = [];
     landing.forEach(function (x) {
-      const blk = { title: clean(x && x.title, 120), text: cleanText(x && x.text, 1500), media: clean(x && x.media, 500) };
-      if (!validMedia(blk.media)) { errors.landing = 1; return; }
-      if (blk.title || blk.text || blk.media) blocks.push(blk);
+      const blk = {
+        title: clean(x && x.title, 120), text: cleanText(x && x.text, 1500), media: clean(x && x.media, 500),
+        titleFr: clean(x && x.titleFr, 120), textFr: cleanText(x && x.textFr, 1500), mediaFr: clean(x && x.mediaFr, 500)
+      };
+      if (!validMedia(blk.media) || !validMedia(blk.mediaFr)) { errors.landing = 1; return; }
+      if (blk.title || blk.text || blk.media || blk.titleFr || blk.textFr || blk.mediaFr) blocks.push(blk);
     });
     out.landing = blocks;
   }
@@ -586,6 +683,24 @@ async function handleApi(req, res, url) {
         const name = crypto.randomBytes(12).toString('hex') + '.' + ext;
         fs.writeFileSync(path.join(UPLOAD_DIR, name), buf);
         return json(res, 201, { url: '/uploads/' + name, size: buf.length });
+      }
+
+      /* French translation helpers (francophone countries). Keys come from the host's environment, never from the browser. */
+      if (route === 'POST /api/admin/translate') {
+        const b = await readBody(req);
+        const items = Array.isArray(b.items) ? b.items.slice(0, 60).map(function (x) { return String(x == null ? '' : x).slice(0, 2000); }) : null;
+        if (!items) return json(res, 400, { error: 'validation' });
+        if (!process.env.ANTHROPIC_API_KEY) return json(res, 503, { error: 'no_anthropic_key' });
+        try { return json(res, 200, { items: await translateTexts(items) }); }
+        catch (e) { console.error('translate failed:', e.message); return json(res, 502, { error: 'translate_failed' }); }
+      }
+      if (route === 'POST /api/admin/translate-image') {
+        const b = await readBody(req);
+        const src = clean(b.url, 500);
+        if (!src || !validMedia(src)) return json(res, 400, { error: 'validation' });
+        if (!process.env.GEMINI_API_KEY) return json(res, 503, { error: 'no_gemini_key' });
+        try { return json(res, 200, { url: await translateImage(src) }); }
+        catch (e) { console.error('image translate failed:', e.message); return json(res, e.code === 'gif' ? 415 : 502, { error: e.code || 'translate_failed' }); }
       }
 
       if (route === 'GET /api/admin/data') return json(res, 200, Object.assign({ orders: db.orders, rates: db.rates }, snapshot()));

@@ -191,7 +191,12 @@
     return COUNTRIES.find(function (c) { return c.code === code; });
   }
 
+  // Francophone countries: their product pages are shown in French (the French fields of a product, when filled in).
+  const FRANCOPHONE = ['CM', 'CF', 'TD', 'GA', 'CG', 'GQ', 'CD', 'SN', 'MA', 'ML', 'BF', 'CI', 'FR'];
+  function isFrancophone(code) { return FRANCOPHONE.indexOf(String(code || '').toUpperCase()) >= 0; }
+
   return {
+    isFrancophone: isFrancophone,
     PRODUCT: PRODUCT, BUNDLES: BUNDLES, CROSS: CROSS, CURRENCIES: CURRENCIES,
     COUNTRIES: COUNTRIES, STATUSES: STATUSES,
     quote: quote, bundleOff: bundleOff, format: format, conv: conv, country: country, rateOf: rateOf, defaultProduct: defaultProduct

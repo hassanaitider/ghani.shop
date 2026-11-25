@@ -247,6 +247,7 @@
       state.products = c.products; pickProduct();
       if (!state.product) return;
       document.documentElement.dataset.country = c.country.code;
+      i18n.forCountry(c.country.lang);
       renderChangeCountry(); renderCountries(); renderProductContent(); renderStock(); renderPrices();
     }).catch(function () { /* offline: keep what is on screen */ })
       .then(function () { document.body.classList.remove('pending'); });
