@@ -33,6 +33,7 @@
     // XAF and XOF are pegged to the euro by treaty (1 EUR = 655.957), so `fixed` rates ignore admin overrides
     XAF: { sym: 'FCFA', dec: 0, step: 500, rate: 655.957, fixed: true, group: 'central' },
     XOF: { sym: 'FCFA', dec: 0, step: 500, rate: 655.957, fixed: true, group: 'africa' },
+    MAD: { sym: 'MAD', dec: 0, step: 5, rate: 10.8, group: 'africa' },
     CDF: { sym: 'FC', dec: 0, step: 500, rate: 2900, group: 'central' },
     NGN: { sym: '₦', dec: 0, step: 500, rate: 1700, group: 'africa' },
     GHS: { sym: 'GH₵', dec: 0, step: 5, rate: 16, group: 'africa' },
@@ -57,6 +58,9 @@
     ['GQ', 'Equatorial Guinea', 'Guinée équatoriale', 'central', 'XAF', '240'],
     ['CD', 'DR Congo (Kinshasa)', 'RD Congo (Kinshasa)', 'central', 'CDF', '243'],
     ['SN', 'Senegal', 'Sénégal', 'africa', 'XOF', '221'],
+    ['MA', 'Morocco', 'Maroc', 'africa', 'MAD', '212'],
+    ['ML', 'Mali', 'Mali', 'africa', 'XOF', '223'],
+    ['BF', 'Burkina Faso', 'Burkina Faso', 'africa', 'XOF', '226'],
     ['CI', "Côte d'Ivoire", "Côte d'Ivoire", 'africa', 'XOF', '225'],
     ['NG', 'Nigeria', 'Nigéria', 'africa', 'NGN', '234'],
     ['GH', 'Ghana', 'Ghana', 'africa', 'GHS', '233'],
@@ -99,13 +103,24 @@
     return off;
   }
 
-  /* quote({qty, cross:[ids], currency, rates}) -> amounts in the local currency */
+  /* A country's own product (prices already in the country's currency). */
+  function defaultProduct(cur, rates) {
+    return {
+      id: PRODUCT.id, name: 'SolarGlow 3-en-1', active: true, stock: PRODUCT.initialStock,
+      price: conv(PRODUCT.priceEUR, cur, rates), compare: conv(PRODUCT.compareEUR, cur, rates),
+      shipping: conv(PRODUCT.shippingEUR, cur, rates), freeShippingQty: PRODUCT.freeShippingQty
+    };
+  }
+
+  /* quote({qty, cross:[ids], currency, rates, product?}) -> amounts in the local currency.
+     With `product` (a country catalog entry) its local prices are used as-is; without it, EUR base prices are converted. */
   function quote(o) {
     const cur = CURRENCIES[o.currency] ? o.currency : 'EUR';
     const qty = Math.min(PRODUCT.maxQty, Math.max(1, Math.floor(Number(o.qty) || 1)));
     const rates = o.rates;
-    const unit = conv(PRODUCT.priceEUR, cur, rates);
-    const compareUnit = conv(PRODUCT.compareEUR, cur, rates);
+    const p = o.product;
+    const unit = p ? Number(p.price) : conv(PRODUCT.priceEUR, cur, rates);
+    const compareUnit = p ? Number(p.compare) : conv(PRODUCT.compareEUR, cur, rates);
     const subtotal = unit * qty;
     const off = discountFor(qty);
     const discount = round(subtotal * off, cur);
@@ -117,7 +132,9 @@
       return { id: id, price: conv(item.priceEUR, cur, rates) };
     });
     const crossTotal = crossLines.reduce(function (s, l) { return s + l.price; }, 0);
-    const shipping = qty >= PRODUCT.freeShippingQty ? 0 : conv(PRODUCT.shippingEUR, cur, rates);
+    const freeQty = p ? Number(p.freeShippingQty) : PRODUCT.freeShippingQty;
+    const shipCost = p ? Number(p.shipping) : conv(PRODUCT.shippingEUR, cur, rates);
+    const shipping = qty >= freeQty ? 0 : shipCost;
     const total = subtotal - discount + crossTotal + shipping;
     return {
       currency: cur, qty: qty, off: off, unit: unit, compareUnit: compareUnit,
@@ -144,6 +161,6 @@
   return {
     PRODUCT: PRODUCT, BUNDLES: BUNDLES, CROSS: CROSS, CURRENCIES: CURRENCIES,
     COUNTRIES: COUNTRIES, STATUSES: STATUSES,
-    quote: quote, format: format, conv: conv, country: country, rateOf: rateOf
+    quote: quote, format: format, conv: conv, country: country, rateOf: rateOf, defaultProduct: defaultProduct
   };
 });

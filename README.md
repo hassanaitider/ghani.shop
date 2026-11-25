@@ -6,10 +6,15 @@ Zero-dependency Node.js app (Node 18+).
 node server.js            # or: npm start
 ```
 
-- Store: http://localhost:3000
-- Admin: http://localhost:3000/admin
+- Home (country picker): http://localhost:3000
+- One page per country: `/ma`, `/ci`, `/ga`, `/ml`, `/bf`, `/sn` (the URL slug is editable in the admin)
+- Admin: http://localhost:3000/admin — tabs: Dashboard, Orders (grouped by country), Countries & products
 
-**Admin password:** set `ADMIN_PASSWORD` (and optionally `PORT`) as environment variables. If not set, a random password is generated on first run and saved in `data/admin-password.txt`.
+**Admin password:** set `ADMIN_PASSWORD` (and optionally `PORT`) as environment variables. If not set, a random password is generated on first run and saved in `DATA_DIR/admin-password.txt`.
+
+**Storage:** everything (countries, per-country catalogs, orders) is in `DATA_DIR/store.json`. `DATA_DIR` defaults to `./data`; on Render it points at the persistent disk (see `render.yaml`). On first start with no countries, Morocco, Côte d'Ivoire, Gabon, Mali, Burkina Faso and Senegal are seeded.
+
+`npm run build` checks that every script parses and that the shared pricing model works (there is no TypeScript or bundler).
 
 ## Where to edit
 

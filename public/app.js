@@ -8,7 +8,9 @@
      and set the path here, e.g. cut: 'media/power-cut.gif' */
   const MEDIA = { cut: null, charge: null, solar: null, sos: null };
 
-  const state = { cur: 'EUR', rates: {}, qty: 1, cross: new Set(), stock: GS.PRODUCT.initialStock, scene: 'cut' };
+  /* Each country has its own page (/ma, /ci, …), currency, prices, stock and product catalog. */
+  const SLUG = location.pathname.replace(/^\/+|\/+$/g, '').toLowerCase();
+  const state = { cur: 'EUR', rates: {}, qty: 1, cross: new Set(), country: null, products: [], product: null, scene: 'cut' };
 
   /* ---------------- icons ---------------- */
   const ICONS = {
@@ -110,64 +112,66 @@
     }).join('');
   }
 
-  /* ---------------- currency ---------------- */
-  const TZ = {
-    'Africa/Dakar': 'XOF', 'Africa/Abidjan': 'XOF', 'Africa/Douala': 'XAF', 'Africa/Bangui': 'XAF', 'Africa/Ndjamena': 'XAF',
-    'Africa/Libreville': 'XAF', 'Africa/Brazzaville': 'XAF', 'Africa/Malabo': 'XAF', 'Africa/Kinshasa': 'CDF',
-    'Africa/Lagos': 'NGN', 'Africa/Accra': 'GHS', 'Africa/Nairobi': 'KES',
-    'Africa/Johannesburg': 'ZAR', 'Europe/Warsaw': 'PLN', 'Europe/Bucharest': 'RON', 'Europe/Prague': 'CZK',
-    'Europe/Budapest': 'HUF', 'Europe/Sofia': 'BGN', 'Europe/Belgrade': 'RSD', 'Europe/Kyiv': 'UAH', 'Europe/Kiev': 'UAH'
-  };
-  function initialCurrency() {
-    try {
-      const saved = localStorage.getItem('gs_cur');
-      if (saved && GS.CURRENCIES[saved]) return saved;
-      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      if (TZ[tz]) return TZ[tz];
-    } catch (e) { /* ignore */ }
-    return 'EUR';
-  }
+  /* ---------------- currency & prices (fixed by the country) ---------------- */
   function fmt(amount) { return GS.format(amount, state.cur, i18n.get()); }
   function eurText(eur) { return fmt(GS.conv(eur, state.cur, state.rates)); }
+  function quoteFor(qty, cross) {
+    return GS.quote({ qty: qty, cross: cross || [], currency: state.cur, rates: state.rates, product: state.product });
+  }
 
-  function renderCurrencySelect() {
-    const groups = { central: [], africa: [], eeurope: [], other: [] };
-    Object.keys(GS.CURRENCIES).forEach(function (c) { groups[GS.CURRENCIES[c].group].push(c); });
-    $('#currency').innerHTML = ['central', 'africa', 'eeurope', 'other'].map(function (g) {
-      return '<optgroup label="' + t('cur.group.' + g) + '">' + groups[g].map(function (c) {
-        return '<option value="' + c + '">' + c + ' (' + GS.CURRENCIES[c].sym + ')</option>';
-      }).join('') + '</optgroup>';
-    }).join('');
-    $('#currency').value = state.cur;
-  }
-  function setCurrency(cur) {
-    if (!GS.CURRENCIES[cur]) return;
-    state.cur = cur;
-    try { localStorage.setItem('gs_cur', cur); } catch (e) { /* ignore */ }
-    $('#currency').value = cur;
-    renderPrices();
-  }
   function renderPrices() {
     $$('[data-eur]').forEach(function (el) { el.textContent = eurText(Number(el.dataset.eur)); });
-    const q = GS.quote({ qty: 1, currency: state.cur, rates: state.rates });
-    $('#saveTag').textContent = t('price.save', { p: Math.round((1 - q.unit / q.compareUnit) * 100) });
+    const q = quoteFor(1);
+    $$('[data-price]').forEach(function (el) { el.textContent = fmt(el.dataset.price === 'compare' ? q.compareUnit : q.unit); });
+    $('#saveTag').textContent = q.compareUnit > q.unit ? t('price.save', { p: Math.round((1 - q.unit / q.compareUnit) * 100) }) : '';
     renderCross(); renderBundles(); renderSummary();
   }
 
   /* ---------------- stock ---------------- */
+  function stockLeft() { return state.product ? state.product.stock : 0; }
   function renderStock() {
-    const n = state.stock;
+    const n = stockLeft();
     $('#stockText').innerHTML = n > 0 ? t('stock.left', { n: n }) : t('stock.out');
-    const pct = Math.max(3, Math.min(100, Math.round(n / GS.PRODUCT.initialStock * 100)));
+    const pct = Math.max(3, Math.min(100, Math.round(n / Math.max(GS.PRODUCT.initialStock, n) * 100)));
     $('#stockBar').style.width = (n > 0 ? pct : 0) + '%';
     $('#stockBox').classList.toggle('is-low', n <= 25);
     $('#submitBtn').disabled = n <= 0;
   }
+  function pickProduct(id) {
+    state.product = state.products.find(function (p) { return p.id === id; }) || state.products[0] || null;
+    state.qty = Math.min(state.qty, Math.max(1, stockLeft()));
+  }
+  function esc(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function renderProductPick() {
+    const box = $('#productPick'), sel = $('#orderForm').elements.product;
+    box.hidden = state.products.length < 2;
+    sel.innerHTML = state.products.map(function (p) {
+      return '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>';
+    }).join('');
+    if (state.product) sel.value = state.product.id;
+  }
+  function flag(code) {
+    return String(code).toUpperCase().replace(/./g, function (ch) { return String.fromCodePoint(127397 + ch.charCodeAt(0)); });
+  }
+  function renderChangeCountry() {
+    const a = $('#changeCountry');
+    a.textContent = state.country ? flag(state.country.code) + ' ' + state.country[i18n.get()] : '';
+  }
   function loadConfig() {
-    return fetch('/api/config', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (c) {
-      state.stock = c.stock; state.rates = c.rates || {};
-      renderStock(); renderPrices();
-    }).catch(function () { /* offline: keep defaults */ });
+    return fetch('/api/config?country=' + encodeURIComponent(SLUG), { cache: 'no-store' }).then(function (r) {
+      if (r.status === 404) { location.replace('/'); throw new Error('unknown country'); }
+      return r.json();
+    }).then(function (c) {
+      const keep = state.product && state.product.id;
+      state.country = c.country; state.cur = c.country.currency; state.rates = c.rates || {};
+      state.products = c.products; pickProduct(keep);
+      document.documentElement.dataset.country = c.country.code;
+      renderChangeCountry(); renderCountries(); renderProductPick(); renderStock(); renderPrices();
+    }).catch(function () { /* offline: keep what is on screen */ });
   }
 
   /* ---------------- FAQ ---------------- */
@@ -208,7 +212,7 @@
   /* ---------------- bundles / quantity / summary ---------------- */
   function renderBundles() {
     $('#bundles').innerHTML = GS.BUNDLES.map(function (b, i) {
-      const q = GS.quote({ qty: b.qty, currency: state.cur, rates: state.rates });
+      const q = quoteFor(b.qty);
       const active = state.qty === b.qty || (b.qty === 3 && state.qty > 3);
       return '<button type="button" class="bundle' + (active ? ' is-active' : '') + '" data-qty="' + b.qty + '">' +
         (b.qty === 2 ? '<span class="bundle__pop">' + t('bundle.pop') + '</span>' : '') +
@@ -219,7 +223,7 @@
     }).join('');
   }
   function currentQuote() {
-    return GS.quote({ qty: state.qty, cross: Array.from(state.cross), currency: state.cur, rates: state.rates });
+    return quoteFor(state.qty, Array.from(state.cross));
   }
   function renderSummary() {
     const q = currentQuote();
@@ -232,7 +236,7 @@
     $('#summary').innerHTML = h;
     $('#qtyVal').textContent = state.qty;
     $('#qtyMinus').disabled = state.qty <= 1;
-    $('#qtyPlus').disabled = state.qty >= Math.min(GS.PRODUCT.maxQty, Math.max(1, state.stock));
+    $('#qtyPlus').disabled = state.qty >= Math.min(GS.PRODUCT.maxQty, Math.max(1, stockLeft()));
   }
   function row(a, b, cls) { return '<div class="sum__row"><span>' + a + '</span><span class="' + (cls || '') + '">' + b + '</span></div>'; }
   function setQty(n) {
@@ -240,16 +244,13 @@
     renderBundles(); renderSummary();
   }
 
-  /* ---------------- countries ---------------- */
+  /* ---------------- country (fixed per page) ---------------- */
   function renderCountries() {
-    const sel = $('#orderForm [name=country]'), keep = sel.value, lang = i18n.get();
-    let h = '<option value="" disabled selected>' + t('f.country.ph') + '</option>';
-    ['central', 'africa', 'eeurope', 'other'].forEach(function (g) {
-      h += '<optgroup label="' + t('cur.group.' + g) + '">' + GS.COUNTRIES.filter(function (c) { return c.region === g; })
-        .map(function (c) { return '<option value="' + c.code + '">' + c[lang] + '</option>'; }).join('') + '</optgroup>';
-    });
-    sel.innerHTML = h;
-    if (keep) sel.value = keep;
+    const sel = $('#orderForm [name=country]');
+    if (!state.country) { sel.innerHTML = ''; return; }
+    sel.innerHTML = '<option value="' + state.country.code + '">' + esc(state.country[i18n.get()]) + '</option>';
+    sel.value = state.country.code;
+    $('#dial').textContent = '+' + state.country.dial;
   }
 
   /* ---------------- form ---------------- */
@@ -257,7 +258,7 @@
     const v = function (n) { return form.elements[n].value.trim(); };
     const bad = {
       name: v('name').length < 2,
-      country: !GS.country(v('country')),
+      country: !v('country'),
       phone: v('phone').replace(/\D/g, '').length < 6,
       city: v('city').length < 2,
       address: v('address').length < 5,
@@ -284,25 +285,25 @@
       name: form.elements.name.value, phone: form.elements.phone.value, country: form.elements.country.value,
       city: form.elements.city.value, address: form.elements.address.value, email: form.elements.email.value,
       note: form.elements.note.value, website: form.elements.website.value,
-      qty: state.qty, cross: Array.from(state.cross), currency: state.cur, lang: i18n.get()
+      productId: state.product && state.product.id, qty: state.qty, cross: Array.from(state.cross), lang: i18n.get()
     };
     fetch('/api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       .then(function (r) { return r.json().then(function (d) { return { status: r.status, d: d }; }); })
       .then(function (r) {
         if (r.status === 201) return success(r.d);
-        if (r.status === 409) { state.stock = r.d.stock; renderStock(); renderSummary(); showError(t('order.err.stock', { n: r.d.stock })); }
+        if (r.status === 409) { if (state.product) state.product.stock = r.d.stock; renderStock(); renderSummary(); showError(t('order.err.stock', { n: r.d.stock })); }
         else if (r.status === 429) showError(t('order.err.rate'));
         else if (r.status === 400 && r.d.fields) {
           Object.keys(r.d.fields).forEach(function (n) { const el = form.elements[n]; if (el) el.closest('.field').classList.add('invalid'); });
         } else showError(t('order.err.net'));
       })
       .catch(function () { showError(t('order.err.net')); })
-      .then(function () { btn.disabled = state.stock <= 0; btn.textContent = t('order.submit'); });
+      .then(function () { btn.disabled = stockLeft() <= 0; btn.textContent = t('order.submit'); });
   }
 
   let lastOrder = null;
   function success(d) {
-    lastOrder = d.order; state.stock = d.stock; renderStock();
+    lastOrder = d.order; if (state.product) state.product.stock = d.stock; renderStock();
     renderConfirm();
     $('#orderForm').hidden = true; $('#confirm').hidden = false;
     $('#confirm').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -316,7 +317,7 @@
 
   /* ---------------- boot ---------------- */
   function renderAll() {
-    renderCurrencySelect(); renderGallery(); renderDemo(); renderCountries();
+    renderGallery(); renderDemo(); renderCountries(); renderChangeCountry(); renderProductPick();
     paintIcons(); renderStock(); renderPrices(); renderConfirm();
     $('#reviewCount').textContent = t('hero.reviews', { n: '1 284' });
     $$('[data-lang]').forEach(function (b) { b.classList.toggle('is-active', b.dataset.lang === i18n.get()); });
@@ -324,17 +325,13 @@
   }
 
   function init() {
-    state.cur = initialCurrency();
     $('#year').textContent = new Date().getFullYear();
     i18n.apply(); renderAll(); initFaq();
 
     document.addEventListener('langchange', function () { renderAll(); });
     $$('[data-lang]').forEach(function (b) { b.addEventListener('click', function () { i18n.set(b.dataset.lang); }); });
-    $('#currency').addEventListener('change', function (e) {
-      setCurrency(e.target.value);
-      // COD is always charged in the destination country's currency, so a mismatching country is cleared
-      const sel = $('#orderForm').elements.country, c = GS.country(sel.value);
-      if (c && c.currency !== state.cur) { sel.value = ''; $('#dial').textContent = '+'; }
+    $('#orderForm').elements.product.addEventListener('change', function (e) {
+      pickProduct(e.target.value); renderStock(); renderPrices();
     });
     $('#thumbs').addEventListener('click', function (e) {
       const b = e.target.closest('[data-scene]'); if (!b) return;
@@ -353,16 +350,11 @@
     $('#qtyPlus').addEventListener('click', function () { setQty(state.qty + 1); });
 
     const form = $('#orderForm');
-    form.elements.country.addEventListener('change', function (e) {
-      const c = GS.country(e.target.value); if (!c) return;
-      $('#dial').textContent = '+' + c.dial;
-      setCurrency(c.currency);
-    });
     form.addEventListener('input', function (e) { const f = e.target.closest('.field'); if (f) f.classList.remove('invalid'); });
     form.addEventListener('submit', submit);
     $('#again').addEventListener('click', function () {
       form.reset(); state.cross.clear(); state.qty = 1; lastOrder = null;
-      $('#dial').textContent = '+'; $('#confirm').hidden = true; form.hidden = false;
+      renderCountries(); renderProductPick(); $('#confirm').hidden = true; form.hidden = false;
       renderCross(); renderBundles(); renderSummary();
     });
 

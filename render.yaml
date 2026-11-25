@@ -3,14 +3,18 @@ services:
     name: ghani-shop
     runtime: node
     plan: starter            # a persistent disk requires a paid plan
-    buildCommand: echo "no build"
+    buildCommand: npm run build
     startCommand: node server.js
-    healthCheckPath: /
+    healthCheckPath: /api/countries
     envVars:
       - key: NODE_VERSION
         value: 20
       - key: ADMIN_PASSWORD
         sync: false          # set it in the Render dashboard
+      - key: DATA_DIR        # store.json (countries, products, orders) lives on the persistent disk
+        value: /opt/render/project/src/data
+      - key: TRUST_PROXY     # real client IP comes from X-Forwarded-For (rate limiting)
+        value: "1"
     disk:
       name: ghani-data
       mountPath: /opt/render/project/src/data

@@ -4,7 +4,8 @@
   "description": "Ghani Shop - single product COD landing page + admin dashboard",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "build": "node scripts/check.js"
   },
   "engines": { "node": ">=18" },
   "license": "UNLICENSED",

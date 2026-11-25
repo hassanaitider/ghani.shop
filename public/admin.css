@@ -96,3 +96,33 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--amber2);
 
 @media (max-width:980px){.grid2,.grid2--wide{grid-template-columns:1fr}.filters{grid-template-columns:1fr 1fr}.wrap{padding:14px}.top{padding:10px 14px}}
 @media (max-width:560px){.d__grid{grid-template-columns:1fr}.filters{grid-template-columns:1fr}.top__title{display:none}}
+
+/* tabs */
+.tabs{display:flex;gap:4px;background:#e9ecf4;border-radius:12px;padding:4px;flex-wrap:wrap}
+.tab{border:0;background:transparent;font:inherit;font-weight:700;font-size:.85rem;padding:.45rem .9rem;border-radius:9px;cursor:pointer;color:var(--muted)}
+.tab.is-active{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(11,18,32,.15)}
+.pane{display:grid;gap:20px}
+.btn--sm{padding:.35rem .7rem;font-size:.8rem}
+a{color:var(--blue)}
+
+/* orders grouped by country */
+.groups{display:grid;gap:16px}
+.cgroup__head{display:flex;justify-content:space-between;align-items:baseline;gap:1rem;margin-bottom:.4rem;flex-wrap:wrap}
+.cgroup__head h3{margin:0;font-size:1.05rem}
+p.empty{text-align:center;color:var(--muted);padding:1.5rem;margin:0}
+
+/* countries & catalog editor */
+.switch{display:inline-flex;align-items:center;gap:.4rem;cursor:pointer;font-weight:600;font-size:.82rem}
+.switch input{width:auto;accent-color:var(--green)}
+.detail--wide{width:min(760px,96vw)}
+.cform,.prow{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.fld{display:grid;gap:.25rem;font-size:.78rem;font-weight:700;color:var(--muted)}
+.fld input,.fld select{font-weight:500;color:var(--ink)}
+.fld--full{grid-column:1/-1}
+.fld--check{display:flex;align-items:center;gap:.5rem;align-self:end;padding-bottom:.55rem}
+.fld--check input{width:auto;accent-color:var(--amber2)}
+.fld .bad,input.bad,select.bad{border-color:var(--red);box-shadow:0 0 0 3px rgba(239,68,68,.15)}
+.catalog{display:grid;gap:12px;border-top:1px solid var(--line);padding-top:16px}
+.catalog h3{margin:0;font-size:1rem}
+.prow{background:#f6f7fb;border-radius:14px;padding:12px}
+.prow__act{display:flex;gap:8px;align-items:end;justify-content:flex-end}
