@@ -287,4 +287,23 @@ svg{display:block}
 .pending .hero{visibility:hidden}
 .plain [data-rich]{display:none!important}
 .stage .scene--img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb--img{padding:0;overflow:hidden;width:72px;height:72px;flex:0 0 auto}
+.thumb--img img{width:100%;height:100%;object-fit:cover;display:block}
+.landing{background:#fff}
+.lp{padding:clamp(28px,5vw,64px) 0}.lp:nth-child(even){background:#f6f7fb}
+.lp__in{display:grid;grid-template-columns:1fr 1fr;gap:clamp(18px,4vw,48px);align-items:center}
+.lp__in:not(:has(.lp__media)){grid-template-columns:1fr;max-width:760px;text-align:center}
+.lp--rev .lp__media{order:2}
+.lp__media img{width:100%;border-radius:20px;display:block;box-shadow:0 18px 40px -22px rgba(11,18,32,.5)}
+.lp__text h2{margin:0 0 .5em;font-size:clamp(1.4rem,3vw,2rem);letter-spacing:-.02em}
+.lp__text p{margin:0;white-space:pre-line;color:#3d465a;font-size:1.05rem;line-height:1.6}
+@media (max-width:760px){.lp__in{grid-template-columns:1fr}.lp--rev .lp__media{order:0}}
+.addons{display:grid;gap:10px;margin:1rem 0}
+.addons h4{margin:0;font-size:1rem}
+.addon{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;border:1.5px solid #e3e7f1;border-radius:14px;padding:10px 12px;background:#fff}
+.addon.is-on{border-color:#16a34a;background:#f0fdf4}
+.addon__img{width:52px;height:52px;border-radius:10px;overflow:hidden;background:#eef0f6;display:grid;place-items:center;font-size:1.4rem}
+.addon__img img{width:100%;height:100%;object-fit:cover}
+.addon b{display:block}
+.addon .muted{font-size:.85rem}
 .stage__ph{display:grid;place-items:center;width:100%;height:100%;font-size:5rem;background:#eef0f6}

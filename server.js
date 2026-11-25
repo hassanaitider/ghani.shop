@@ -14,6 +14,10 @@ const PW_FILE = path.join(DATA_DIR, 'admin-password.txt');
 const TRUST_PROXY = process.env.TRUST_PROXY === '1' || !!process.env.RENDER;
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
+// Uploaded product media lives next to store.json, so it sits on the same persistent disk.
+const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
+fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+const MAX_UPLOAD = 8 * 1024 * 1024;
 
 /* ---------- admin password (env var, or generated once and saved in DATA_DIR) ---------- */
 let ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
@@ -121,6 +125,13 @@ function startupSync() {
     if (p.description === undefined) p.description = '';
     if (p.image === undefined) p.image = '';
     if (p.colorOptions === undefined) p.colorOptions = false;
+    if (!Array.isArray(p.gallery)) p.gallery = [];
+    if (p.sizesEnabled === undefined) p.sizesEnabled = false;
+    if (!Array.isArray(p.sizes) || !p.sizes.length) p.sizes = ['S', 'M', 'L', 'XL'];
+    if (!Array.isArray(p.crossSellIds)) p.crossSellIds = [];
+    if (!Array.isArray(p.landing)) p.landing = [];
+    // the SolarGlow offer keeps its 1 / 2 / 3 quantity tiers; other products start without any
+    if (!Array.isArray(p.bundles)) p.bundles = p.id === 'solarglow' ? GS.defaultProduct('EUR', {}).bundles : [];
     if (p.rich === undefined) p.rich = p.id === 'solarglow'; // the SolarGlow offer keeps its full marketing page
     if (!p.categoryId || !findCategory(p.categoryId)) {
       const fallback = findCategory(p.countryCode.toLowerCase() + '-gadgets') || categoriesOf(p.countryCode)[0];
@@ -134,6 +145,7 @@ function startupSync() {
   if (added.length) console.log('Added countries: ' + added.join(', '));
 }
 startupSync();
+collectGarbage();
 
 function publicCountry(c) {
   return { code: c.code, slug: c.slug, en: c.en, fr: c.fr, flag: c.flag || flagOf(c.code), currency: c.currency, dial: c.dial, region: c.region };
@@ -142,6 +154,7 @@ function publicCategory(c) { return { id: c.id, en: c.en, fr: c.fr }; }
 function publicProduct(p) {
   return {
     id: p.id, name: p.name, description: p.description, image: p.image, colorOptions: p.colorOptions, rich: p.rich, categoryId: p.categoryId,
+    gallery: p.gallery, sizesEnabled: p.sizesEnabled, sizes: p.sizes, bundles: p.bundles, crossSellIds: p.crossSellIds, landing: p.landing,
     price: p.price, compare: p.compare, shipping: p.shipping, freeShippingQty: p.freeShippingQty, stock: p.stock
   };
 }
@@ -193,6 +206,40 @@ function readBody(req) {
     });
     req.on('error', reject);
   });
+}
+function readRaw(req, limit) {
+  return new Promise(function (resolve, reject) {
+    let size = 0, over = false; const chunks = [];
+    req.on('data', function (c) { // keep draining an oversized upload so the client can still read the 413 answer
+      size += c.length;
+      if (size > limit) { over = true; chunks.length = 0; return; }
+      if (!over) chunks.push(c);
+    });
+    req.on('end', function () { if (over) reject(new Error('too large')); else resolve(Buffer.concat(chunks)); });
+    req.on('error', reject);
+  });
+}
+// The real type comes from the file's own signature, never from the client-supplied name or Content-Type.
+function imageExt(b) {
+  if (b.length > 12 && b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF) return 'jpg';
+  if (b.length > 12 && b.slice(0, 8).equals(Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]))) return 'png';
+  if (b.length > 12 && /^GIF8[79]a$/.test(b.slice(0, 6).toString('latin1'))) return 'gif';
+  if (b.length > 12 && b.slice(0, 4).toString('latin1') === 'RIFF' && b.slice(8, 12).toString('latin1') === 'WEBP') return 'webp';
+  return null;
+}
+// Delete uploaded files that no product references any more (kept for 24 h so a file uploaded but not yet saved survives).
+function collectGarbage() {
+  const keep = new Set();
+  const add = function (u) { const m = typeof u === 'string' && u.match(/^\/uploads\/([a-f0-9]{24}\.\w+)$/); if (m) keep.add(m[1]); };
+  db.products.forEach(function (p) { add(p.image); (p.gallery || []).forEach(add); (p.landing || []).forEach(function (x) { add(x.media); }); });
+  const cutoff = Date.now() - 24 * 3600 * 1000;
+  try {
+    fs.readdirSync(UPLOAD_DIR).forEach(function (f) {
+      if (keep.has(f) || !/^[a-f0-9]{24}\.\w+$/.test(f)) return;
+      const fp = path.join(UPLOAD_DIR, f);
+      try { if (fs.statSync(fp).mtimeMs < cutoff) fs.unlinkSync(fp); } catch (e) { /* ignore */ }
+    });
+  } catch (e) { /* ignore */ }
 }
 function clean(v, max) {
   return String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max);
@@ -262,22 +309,35 @@ function createOrder(b) {
   if (city.length < 2) errors.city = 1;
   if (address.length < 5) errors.address = 1;
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = 1;
-  let product = null, color = '';
+  let product = null, color = '', size = '';
+  const addonProducts = [];
   if (country) {
     const live = visibleProducts(country.code);
     product = b.productId ? live.find(function (p) { return p.id === b.productId; }) : live[0];
     if (!product) errors.product = 1;
-    else if (product.colorOptions) { color = clean(b.color, 40); if (!color) errors.color = 1; }
+    else {
+      if (product.colorOptions) { color = clean(b.color, 40); if (!color) errors.color = 1; }
+      if (product.sizesEnabled) { size = clean(b.size, 10); if (!product.sizes.includes(size)) errors.size = 1; }
+      // complementary products: only the ones this product offers, from the same country, in stock
+      const wanted = Array.isArray(b.addons) ? Array.from(new Set(b.addons.map(String))) : [];
+      wanted.forEach(function (id) {
+        const ap = live.find(function (x) { return x.id === id; });
+        if (ap && ap.id !== product.id && product.crossSellIds.includes(id) && ap.stock > 0) addonProducts.push(ap);
+        else errors.addons = 1;
+      });
+    }
   }
   if (Object.keys(errors).length) return { status: 400, body: { error: 'validation', fields: errors } };
 
   // Cash on delivery is collected in the destination country's currency, at that country's own prices
   const cross = product.rich && Array.isArray(b.cross) ? b.cross : [];
-  const q = GS.quote({ qty: b.qty, cross: cross, currency: country.currency, rates: db.rates, product: product });
+  const addons = addonProducts.map(function (a) { return { id: a.id, name: a.name, price: a.price }; });
+  const q = GS.quote({ qty: b.qty, cross: cross, addons: addons, currency: country.currency, rates: db.rates, product: product });
   if (q.qty > product.stock) return { status: 409, body: { error: 'stock', stock: product.stock } };
 
   db.seq += 1;
   product.stock -= q.qty;
+  addonProducts.forEach(function (a) { a.stock -= 1; });
   const phone = '+' + (phoneDigits.startsWith(country.dial) && phoneDigits.length > country.dial.length + 6
     ? phoneDigits : country.dial + phoneDigits.replace(/^0+/, ''));
   const order = {
@@ -290,10 +350,12 @@ function createOrder(b) {
     productId: product.id,
     productName: product.name,
     color: color,
+    size: size,
     qty: q.qty,
     cross: q.cross.map(function (l) { return l.id; }),
+    addons: q.addons,
     currency: q.currency,
-    amounts: { unit: q.unit, subtotal: q.subtotal, discount: q.discount, cross: q.crossTotal, shipping: q.shipping, total: q.total },
+    amounts: { unit: q.unit, subtotal: q.subtotal, discount: q.discount, cross: q.crossTotal, addons: q.addonTotal, shipping: q.shipping, total: q.total },
     totalEUR: q.totalEUR,
     lang: b.lang === 'fr' ? 'fr' : 'en',
     note: note,
@@ -312,16 +374,25 @@ function orderProduct(o) {
   return findProduct(o.shipping.country, o.productId);
 }
 
+// The stock an order holds: its product (qty units) and each complementary product (1 unit).
+// Products that have since been deleted are skipped.
+function stockLines(o) {
+  const lines = [];
+  const p = orderProduct(o);
+  if (p) lines.push([p, o.qty]);
+  (o.addons || []).forEach(function (a) { const ap = findProduct(o.shipping.country, a.id); if (ap) lines.push([ap, 1]); });
+  return lines;
+}
+
 function updateOrder(id, b) {
   const o = db.orders.find(function (x) { return x.id === id; });
   if (!o) return { status: 404, body: { error: 'not found' } };
-  const prod = orderProduct(o); // undefined for orders whose product/country has since been deleted
   if (b.status !== undefined) {
     if (!GS.STATUSES.includes(b.status)) return { status: 400, body: { error: 'bad status' } };
     if (b.status !== o.status) {
       const wantHeld = holdsStock(b.status);
-      if (o.stockHeld && !wantHeld) { if (prod) prod.stock += o.qty; o.stockHeld = false; }
-      else if (!o.stockHeld && wantHeld) { if (prod) prod.stock = Math.max(0, prod.stock - o.qty); o.stockHeld = true; }
+      if (o.stockHeld && !wantHeld) { stockLines(o).forEach(function (l) { l[0].stock += l[1]; }); o.stockHeld = false; }
+      else if (!o.stockHeld && wantHeld) { stockLines(o).forEach(function (l) { l[0].stock = Math.max(0, l[0].stock - l[1]); }); o.stockHeld = true; }
       o.status = b.status;
       o.history.push({ status: b.status, at: new Date().toISOString() });
     }
@@ -388,6 +459,11 @@ function newProductId(code, name) {
   return id;
 }
 
+// Product media is an uploaded file (/uploads/<id>.<ext>); older https:// and /media/ paths stay valid.
+function validMedia(u) {
+  return u === '' || /^\/uploads\/[a-f0-9]{24}\.(?:jpg|png|webp|gif)$/.test(u) || /^(https:\/\/[^\s"'<>]+|\/media\/[A-Za-z0-9._\/-]+)$/.test(u);
+}
+
 // Validates a product for `countryCode`; `existing` is null when creating.
 function readProduct(b, existing, countryCode) {
   const src = existing || {}, out = {}, errors = {};
@@ -395,8 +471,57 @@ function readProduct(b, existing, countryCode) {
   if (!name) errors.name = 1; else out.name = name;
   out.description = b.description !== undefined ? cleanText(b.description, 2000) : (src.description || '');
   const image = b.image !== undefined ? clean(b.image, 500) : (src.image || '');
-  if (image && !/^(https:\/\/[^\s"'<>]+|\/media\/[A-Za-z0-9._\/-]+)$/.test(image)) errors.image = 1; else out.image = image;
+  if (!validMedia(image)) errors.image = 1; else out.image = image;
   out.colorOptions = b.colorOptions !== undefined ? !!b.colorOptions : !!src.colorOptions;
+
+  // extra gallery images / GIFs
+  const gallery = b.gallery !== undefined ? b.gallery : (src.gallery || []);
+  if (!Array.isArray(gallery) || gallery.length > 8 || !gallery.every(function (u) { return typeof u === 'string' && u && validMedia(u); })) errors.gallery = 1;
+  else out.gallery = gallery.slice();
+
+  // size variants (S, M, L, XL …)
+  out.sizesEnabled = b.sizesEnabled !== undefined ? !!b.sizesEnabled : !!src.sizesEnabled;
+  let sizes = b.sizes !== undefined ? b.sizes : (src.sizes || ['S', 'M', 'L', 'XL']);
+  if (typeof sizes === 'string') sizes = sizes.split(/[,;\n]/);
+  if (!Array.isArray(sizes)) errors.sizes = 1;
+  else {
+    sizes = Array.from(new Set(sizes.map(function (x) { return clean(x, 10); }).filter(Boolean)));
+    if (sizes.length > 12 || (out.sizesEnabled && !sizes.length)) errors.sizes = 1; else out.sizes = sizes;
+  }
+
+  // quantity offers (bundles) with a discount
+  const rawBundles = b.bundles !== undefined ? b.bundles : (src.bundles || []);
+  if (!Array.isArray(rawBundles) || rawBundles.length > 6) errors.bundles = 1;
+  else {
+    const seen = {}, list = [];
+    rawBundles.forEach(function (x) {
+      const qty = num(x && x.qty, 1, 10), off = num(x && x.off, 0, 90);
+      if (qty === null || off === null || seen[Math.floor(qty)]) { errors.bundles = 1; return; }
+      seen[Math.floor(qty)] = 1;
+      list.push({ qty: Math.floor(qty), off: Math.round(off), label: clean(x.label, 30) });
+    });
+    out.bundles = list.sort(function (p, q) { return p.qty - q.qty; });
+  }
+
+  // complementary products (cross-sell): other products of the same country
+  const cross = b.crossSellIds !== undefined ? b.crossSellIds : (src.crossSellIds || []);
+  if (!Array.isArray(cross) || cross.length > 6 || !cross.every(function (id) {
+    return typeof id === 'string' && (!existing || id !== existing.id) && !!findProduct(countryCode, id);
+  })) errors.crossSellIds = 1;
+  else out.crossSellIds = Array.from(new Set(cross));
+
+  // landing page blocks: heading + text + image/GIF
+  const landing = b.landing !== undefined ? b.landing : (src.landing || []);
+  if (!Array.isArray(landing) || landing.length > 12) errors.landing = 1;
+  else {
+    const blocks = [];
+    landing.forEach(function (x) {
+      const blk = { title: clean(x && x.title, 120), text: cleanText(x && x.text, 1500), media: clean(x && x.media, 500) };
+      if (!validMedia(blk.media)) { errors.landing = 1; return; }
+      if (blk.title || blk.text || blk.media) blocks.push(blk);
+    });
+    out.landing = blocks;
+  }
   const catId = b.categoryId !== undefined ? clean(b.categoryId, 80) : src.categoryId;
   const cat = findCategory(catId);
   if (!cat || cat.countryCode !== countryCode) errors.categoryId = 1; else out.categoryId = cat.id;
@@ -453,6 +578,16 @@ async function handleApi(req, res, url) {
     if (url.pathname.startsWith('/api/admin/')) {
       if (!isAdmin(req)) return json(res, 401, { error: 'unauthorized' });
 
+      /* media upload: the raw image bytes are the request body */
+      if (route === 'POST /api/admin/uploads') {
+        const buf = await readRaw(req, MAX_UPLOAD);
+        const ext = imageExt(buf);
+        if (!ext) return json(res, 415, { error: 'unsupported' });
+        const name = crypto.randomBytes(12).toString('hex') + '.' + ext;
+        fs.writeFileSync(path.join(UPLOAD_DIR, name), buf);
+        return json(res, 201, { url: '/uploads/' + name, size: buf.length });
+      }
+
       if (route === 'GET /api/admin/data') return json(res, 200, Object.assign({ orders: db.orders, rates: db.rates }, snapshot()));
 
       if (route === 'PUT /api/admin/settings') {
@@ -497,7 +632,7 @@ async function handleApi(req, res, url) {
           db.countries.splice(db.countries.indexOf(c), 1);
           db.categories = db.categories.filter(function (x) { return x.countryCode !== c.code; });
           db.products = db.products.filter(function (x) { return x.countryCode !== c.code; });
-          save();
+          save(); collectGarbage();
           return json(res, 200, Object.assign({ ok: true }, snapshot()));
         }
       }
@@ -575,12 +710,14 @@ async function handleApi(req, res, url) {
           const r = readProduct(b, p, code);
           if (r.errors) return json(res, 400, { error: 'validation', fields: r.errors });
           Object.assign(p, r.value);
-          save();
+          save(); collectGarbage();
           return json(res, 200, Object.assign({ product: p }, snapshot()));
         }
         if (req.method === 'DELETE') {
           db.products.splice(db.products.indexOf(p), 1);
-          save();
+          // other products no longer offer a deleted product as an add-on
+          db.products.forEach(function (x) { if (x.countryCode === code) x.crossSellIds = x.crossSellIds.filter(function (id) { return id !== p.id; }); });
+          save(); collectGarbage();
           return json(res, 200, Object.assign({ ok: true }, snapshot()));
         }
       }
@@ -595,7 +732,7 @@ async function handleApi(req, res, url) {
         const i = db.orders.findIndex(function (x) { return x.id === m[1]; });
         if (i < 0) return json(res, 404, { error: 'not found' });
         const o = db.orders[i];
-        if (o.stockHeld) { const prod = orderProduct(o); if (prod) prod.stock += o.qty; }
+        if (o.stockHeld) stockLines(o).forEach(function (l) { l[0].stock += l[1]; });
         db.orders.splice(i, 1);
         save();
         return json(res, 200, Object.assign({ ok: true }, snapshot()));
@@ -610,6 +747,12 @@ async function handleApi(req, res, url) {
 /* URL structure:  /  country picker   ·   /<country>  that country's categories + products   ·   /<country>/<product>  product page */
 function serveStatic(req, res, url) {
   let p = decodeURIComponent(url.pathname);
+  if (p.startsWith('/uploads/')) {
+    // uploaded media: the file name is a random id, so it can be cached for a long time
+    const m = p.match(/^\/uploads\/([a-f0-9]{24}\.(?:jpg|png|webp|gif))$/);
+    if (!m) return send(res, 404, 'Not found', { 'Content-Type': 'text/plain' });
+    return sendFile(req, res, path.join(UPLOAD_DIR, m[1]), 'public, max-age=31536000, immutable');
+  }
   if (p === '/index.html' || p === '/country.html') return redirect(res, 301, '/');
   if (p === '/') p = '/home.html';
   else if (p === '/admin') p = '/admin.html';
@@ -631,12 +774,17 @@ function serveStatic(req, res, url) {
   }
   const file = path.normalize(path.join(PUBLIC, p));
   if (!file.startsWith(PUBLIC + path.sep)) return send(res, 403, 'Forbidden');
+  sendFile(req, res, file, path.extname(file).toLowerCase() === '.html' ? 'no-cache' : 'public, max-age=300');
+}
+
+function sendFile(req, res, file, cache) {
   fs.stat(file, function (err, st) {
     if (err || !st.isFile()) return send(res, 404, 'Not found', { 'Content-Type': 'text/plain' });
     const ext = path.extname(file).toLowerCase();
     res.writeHead(200, Object.assign({
       'Content-Type': MIME[ext] || 'application/octet-stream',
-      'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=300'
+      'Content-Length': st.size,
+      'Cache-Control': cache
     }, SEC_HEADERS));
     if (req.method === 'HEAD') return res.end();
     fs.createReadStream(file).pipe(res);

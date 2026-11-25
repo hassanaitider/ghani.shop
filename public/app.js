@@ -11,7 +11,7 @@
   /* Each country has its own page (/ma, /ci, …), currency, prices, stock and product catalog. */
   const PARTS = location.pathname.split('/').filter(Boolean);
   const SLUG = (PARTS[0] || '').toLowerCase(), PID = PARTS[1] || '';
-  const state = { cur: 'EUR', rates: {}, qty: 1, cross: new Set(), country: null, products: [], product: null, scene: 'cut' };
+  const state = { cur: 'EUR', rates: {}, qty: 1, cross: new Set(), addons: new Set(), mediaIdx: 0, country: null, products: [], product: null, scene: 'cut' };
 
   /* ---------------- icons ---------------- */
   const ICONS = {
@@ -98,14 +98,24 @@
   }
 
   const GALLERY = ['cut', 'charge', 'solar', 'sos'];
+  function mediaList(p) { return [p.image].concat(p.gallery || []).filter(Boolean); }
+  let gallerySig = '';
   function renderGallery() {
     if (isPlain()) {
-      $('#stage').innerHTML = state.product.image
-        ? '<img class="scene scene--img" src="' + esc(state.product.image) + '" alt="' + esc(state.product.name) + '">'
+      const list = mediaList(state.product);
+      if (state.mediaIdx >= list.length) state.mediaIdx = 0;
+      const sig = JSON.stringify([list, state.mediaIdx, state.product.name]);
+      if (sig === gallerySig) return; // keep animated GIFs from restarting on every refresh
+      gallerySig = sig;
+      $('#stage').innerHTML = list.length
+        ? '<img class="scene scene--img" src="' + esc(list[state.mediaIdx]) + '" alt="' + esc(state.product.name) + '">'
         : '<div class="stage__ph" aria-hidden="true">⚡</div>';
-      $('#thumbs').innerHTML = '';
+      $('#thumbs').innerHTML = list.length > 1 ? list.map(function (u, i) {
+        return '<button type="button" class="thumb thumb--img' + (i === state.mediaIdx ? ' is-active' : '') + '" data-media="' + i + '" aria-label="' + (i + 1) + '"><img src="' + esc(u) + '" alt=""></button>';
+      }).join('') : '';
       return;
     }
+    gallerySig = '';
     $('#stage').innerHTML = sceneHTML(state.scene);
     $('#thumbs').innerHTML = GALLERY.map(function (n, i) {
       return '<button type="button" role="tab" class="thumb' + (n === state.scene ? ' is-active' : '') + '" data-scene="' + n + '" aria-selected="' + (n === state.scene) + '">' +
@@ -123,8 +133,12 @@
   /* ---------------- currency & prices (fixed by the country) ---------------- */
   function fmt(amount) { return GS.format(amount, state.cur, i18n.get()); }
   function eurText(eur) { return fmt(GS.conv(eur, state.cur, state.rates)); }
-  function quoteFor(qty, cross) {
-    return GS.quote({ qty: qty, cross: cross || [], currency: state.cur, rates: state.rates, product: state.product });
+  function addonLines() {
+    return Array.from(state.addons).map(function (id) { return state.products.find(function (p) { return p.id === id; }); })
+      .filter(Boolean).map(function (p) { return { id: p.id, name: p.name, price: p.price }; });
+  }
+  function quoteFor(qty, cross, withAddons) {
+    return GS.quote({ qty: qty, cross: cross || [], addons: withAddons ? addonLines() : [], currency: state.cur, rates: state.rates, product: state.product });
   }
 
   function renderPrices() {
@@ -157,6 +171,7 @@
     const p = state.product; if (!p) return;
     document.body.classList.toggle('plain', !p.rich);
     $('#colorField').hidden = !p.colorOptions;
+    renderVariants(); renderLanding(); renderAddons();
     document.title = p.name + ' — Ghani Shop';
     if (contentFor !== p.id && !p.rich) {
       const h1 = $('.hero__info h1'), lead = $('.hero__info .lead');
@@ -167,6 +182,48 @@
     if (!p.rich) { $('.hero__info h1').textContent = p.name; $('.hero__info .lead').textContent = p.description || ''; }
     contentFor = p.id;
     renderGallery();
+  }
+  let sizeSig = '';
+  function renderVariants() {
+    const p = state.product, field = $('#sizeField'), sel = $('#orderForm').elements.size;
+    field.hidden = !(p && p.sizesEnabled);
+    const sig = p && p.sizesEnabled ? JSON.stringify(p.sizes) : '';
+    if (sig === sizeSig) return;
+    sizeSig = sig;
+    const keep = sel.value;
+    sel.innerHTML = sig ? '<option value="">' + esc(t('f.size.ph')) + '</option>' + p.sizes.map(function (z) { return '<option value="' + esc(z) + '">' + esc(z) + '</option>'; }).join('') : '';
+    if (keep) sel.value = keep;
+  }
+  let landingSig = '';
+  function renderLanding() {
+    const blocks = (state.product && state.product.landing) || [];
+    const sig = JSON.stringify(blocks);
+    if (sig === landingSig) return;
+    landingSig = sig;
+    const el = $('#landing');
+    el.hidden = !blocks.length;
+    el.innerHTML = blocks.map(function (b, i) {
+      return '<div class="lp' + (i % 2 ? ' lp--rev' : '') + '"><div class="container lp__in">' +
+        (b.media ? '<div class="lp__media"><img src="' + esc(b.media) + '" alt="' + esc(b.title) + '" loading="lazy"></div>' : '') +
+        '<div class="lp__text">' + (b.title ? '<h2>' + esc(b.title) + '</h2>' : '') + (b.text ? '<p>' + esc(b.text) + '</p>' : '') + '</div></div></div>';
+    }).join('');
+  }
+  // complementary products offered with this one (cross-sell)
+  function addonCandidates() {
+    const p = state.product; if (!p) return [];
+    return (p.crossSellIds || []).map(function (id) { return state.products.find(function (x) { return x.id === id; }); })
+      .filter(function (x) { return x && x.stock > 0; });
+  }
+  function renderAddons() {
+    const list = addonCandidates(), box = $('#addons');
+    Array.from(state.addons).forEach(function (id) { if (!list.some(function (x) { return x.id === id; })) state.addons.delete(id); });
+    box.hidden = !list.length;
+    box.innerHTML = list.length ? '<h4>' + t('addons.title') + '</h4>' + list.map(function (a) {
+      const on = state.addons.has(a.id);
+      return '<div class="addon' + (on ? ' is-on' : '') + '"><div class="addon__img">' + (a.image ? '<img src="' + esc(a.image) + '" alt="">' : '⚡') + '</div>' +
+        '<div><b>' + esc(a.name) + '</b><span class="muted">+ ' + fmt(a.price) + '</span></div>' +
+        '<button type="button" class="btn ' + (on ? 'btn--ok' : 'btn--ghost') + ' btn--sm" data-addon="' + esc(a.id) + '">' + (on ? t('addons.added') : t('addons.add')) + '</button></div>';
+    }).join('') : '';
   }
   function esc(v) {
     return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
@@ -232,19 +289,26 @@
 
   /* ---------------- bundles / quantity / summary ---------------- */
   function renderBundles() {
-    $('#bundles').innerHTML = GS.BUNDLES.map(function (b, i) {
+    const p = state.product, list = p ? p.bundles || [] : GS.BUNDLES.map(function (b) { return { qty: b.qty, off: b.off * 100, label: '' }; });
+    $('#bundles').hidden = !list.length;
+    $('#bundles').innerHTML = list.map(function (b, i) {
       const q = quoteFor(b.qty);
-      const active = state.qty === b.qty || (b.qty === 3 && state.qty > 3);
+      const active = state.qty === b.qty || (i === list.length - 1 && state.qty > b.qty);
+      // the SolarGlow offer keeps its translated 1 / 2 / 3 labels; custom offers use their own label
+      const stock = !b.label && p && p.rich && b.qty === i + 1 && i < 3;
+      const title = b.label || (stock ? t('bundle.' + (i + 1) + '.t') : (b.qty === 1 ? t('bundle.generic.1') : t('bundle.generic.n', { n: b.qty })));
+      const desc = stock ? t('bundle.' + (i + 1) + '.d')
+        : (b.off ? '−' + b.off + '%' + (q.shipping === 0 && b.qty > 1 ? ' + ' + t('bundle.free') : '') : '');
       return '<button type="button" class="bundle' + (active ? ' is-active' : '') + '" data-qty="' + b.qty + '">' +
-        (b.qty === 2 ? '<span class="bundle__pop">' + t('bundle.pop') + '</span>' : '') +
-        '<b>' + t('bundle.' + (i + 1) + '.t') + '</b><small>' + t('bundle.' + (i + 1) + '.d') + '</small>' +
+        (stock && b.qty === 2 ? '<span class="bundle__pop">' + t('bundle.pop') + '</span>' : '') +
+        '<b>' + esc(title) + '</b><small>' + esc(desc) + '</small>' +
         '<span class="bundle__p">' + fmt(q.subtotal - q.discount) + '</span>' +
         (b.qty > 1 ? '<span class="muted small">' + fmt((q.subtotal - q.discount) / b.qty) + ' ' + t('bundle.each') + '</span>' : '') +
         '</button>';
     }).join('');
   }
   function currentQuote() {
-    return quoteFor(state.qty, Array.from(state.cross));
+    return quoteFor(state.qty, Array.from(state.cross), true);
   }
   function renderSummary() {
     const q = currentQuote();
@@ -252,6 +316,7 @@
       row(isPlain() ? esc(state.product.name) + ' × ' + q.qty : t('sum.product', { n: q.qty }), fmt(q.subtotal));
     if (q.discount) h += row(t('sum.discount') + ' (−' + Math.round(q.off * 100) + '%)', '−' + fmt(q.discount), 'green');
     q.cross.forEach(function (l) { h += row(t('cs.' + l.id), fmt(l.price)); });
+    q.addons.forEach(function (l) { h += row(esc(l.name), fmt(l.price)); });
     h += row(t('sum.shipping'), q.shipping ? fmt(q.shipping) : t('sum.free'), q.shipping ? '' : 'green');
     h += '<div class="sum__total"><span>' + t('sum.total') + '</span><b>' + fmt(q.total) + '</b></div>';
     $('#summary').innerHTML = h;
@@ -284,6 +349,7 @@
       city: v('city').length < 2,
       address: v('address').length < 5,
       color: !$('#colorField').hidden && v('color').length < 1,
+      size: !$('#sizeField').hidden && !v('size'),
       email: !!v('email') && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v('email'))
     };
     let first = null;
@@ -307,7 +373,7 @@
       name: form.elements.name.value, phone: form.elements.phone.value, country: form.elements.country.value,
       city: form.elements.city.value, address: form.elements.address.value, email: form.elements.email.value,
       note: form.elements.note.value, website: form.elements.website.value,
-      productId: state.product && state.product.id, color: form.elements.color.value, qty: state.qty, cross: Array.from(state.cross), lang: i18n.get()
+      productId: state.product && state.product.id, color: form.elements.color.value, size: form.elements.size.value, addons: Array.from(state.addons), qty: state.qty, cross: Array.from(state.cross), lang: i18n.get()
     };
     fetch('/api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       .then(function (r) { return r.json().then(function (d) { return { status: r.status, d: d }; }); })
@@ -350,11 +416,19 @@
     $('#year').textContent = new Date().getFullYear();
     i18n.apply(); renderAll(); initFaq();
 
-    document.addEventListener('langchange', function () { renderAll(); });
+    document.addEventListener('langchange', function () { renderAll(); renderAddons(); });
     $$('[data-lang]').forEach(function (b) { b.addEventListener('click', function () { i18n.set(b.dataset.lang); }); });
     $('#thumbs').addEventListener('click', function (e) {
+      const m = e.target.closest('[data-media]');
+      if (m) { state.mediaIdx = Number(m.dataset.media); renderGallery(); return; }
       const b = e.target.closest('[data-scene]'); if (!b) return;
       state.scene = b.dataset.scene; renderGallery();
+    });
+    $('#addons').addEventListener('click', function (e) {
+      const b = e.target.closest('[data-addon]'); if (!b) return;
+      const id = b.dataset.addon;
+      if (state.addons.has(id)) state.addons.delete(id); else state.addons.add(id);
+      renderAddons(); renderSummary();
     });
     $('#crossGrid').addEventListener('click', function (e) {
       const b = e.target.closest('[data-cross]'); if (!b) return;
@@ -372,9 +446,9 @@
     form.addEventListener('input', function (e) { const f = e.target.closest('.field'); if (f) f.classList.remove('invalid'); });
     form.addEventListener('submit', submit);
     $('#again').addEventListener('click', function () {
-      form.reset(); state.cross.clear(); state.qty = 1; lastOrder = null;
+      form.reset(); state.cross.clear(); state.addons.clear(); state.qty = 1; sizeSig = ''; lastOrder = null;
       renderCountries(); $('#confirm').hidden = true; form.hidden = false;
-      renderCross(); renderBundles(); renderSummary();
+      renderVariants(); renderAddons(); renderCross(); renderBundles(); renderSummary();
     });
 
     loadConfig();

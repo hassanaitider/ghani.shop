@@ -252,6 +252,7 @@
     const line = function (l, v, cls) { return '<div class="' + (cls || '') + '"><span>' + l + '</span><span>' + v + '</span></div>'; };
     let lines = line(esc(o.productName || 'SolarGlow') + ' × ' + o.qty, loc(a.subtotal, o.currency));
     if (a.discount) lines += line(t('sum.discount'), '−' + loc(a.discount, o.currency));
+    if (o.addons && o.addons.length) lines += line(o.addons.map(function (x) { return esc(x.name); }).join(', '), loc(a.addons || 0, o.currency));
     if (o.cross.length) lines += line(o.cross.map(function (c) { return esc(crossNames[c] || c); }).join(', '), loc(a.cross, o.currency));
     lines += line(t('sum.shipping'), a.shipping ? loc(a.shipping, o.currency) : t('sum.free'));
     lines += line('Total · ' + eur(o.totalEUR), loc(a.total, o.currency), 'tot');
@@ -264,6 +265,7 @@
       '<div class="d__item"><small>' + t('a.col.country') + '</small>' + flag(o.shipping.country) + ' ' + esc(cname(o.shipping.country, o)) + ' · ' + esc(o.shipping.city) + '</div>' +
       '<div class="d__item"><small>' + t('a.d.email') + '</small>' + (esc(o.customer.email) || '—') + '</div>' +
       (o.color ? '<div class="d__item"><small>' + t('f.color') + '</small>' + esc(o.color) + '</div>' : '') +
+      (o.size ? '<div class="d__item"><small>' + t('f.size') + '</small>' + esc(o.size) + '</div>' : '') +
       '<div class="d__item d__item--full"><small>' + t('a.d.address') + '</small>' + esc(o.shipping.address) + '</div>' +
       (o.note ? '<div class="d__item d__item--full"><small>' + t('a.d.note') + '</small>' + esc(o.note) + '</div>' : '') +
       '</div><div class="d__lines">' + lines + '</div>' +
@@ -478,7 +480,7 @@
     body.innerHTML = list.length ? '<div class="tablewrap"><table class="table"><thead><tr><th>' + t('a.prod.name') + '</th><th>' + t('a.prod.category') + '</th><th class="num">' +
       t('a.prod.price') + ' (' + esc(c.currency) + ')</th><th class="num">' + t('a.prod.stock') + '</th><th>' + t('a.cty.status') + '</th><th></th></tr></thead><tbody>' +
       list.map(function (p) {
-        return '<tr><td><b>' + esc(p.name) + '</b><small>/' + esc(c.slug) + '/' + esc(p.id) + (p.colorOptions ? ' · ' + t('f.color') : '') + '</small></td>' +
+        return '<tr><td>' + (p.image ? '<img class="pimg" src="' + esc(p.image) + '" alt=""> ' : '') + '<b>' + esc(p.name) + '</b><small>/' + esc(c.slug) + '/' + esc(p.id) + (p.colorOptions ? ' · ' + t('f.color') : '') + '</small></td>' +
           '<td>' + esc(catName(p.categoryId)) + '</td><td class="num">' + loc(p.price, c.currency) + '</td><td class="num">' + p.stock + '</td>' +
           '<td><label class="switch"><input type="checkbox" data-ptoggle="' + esc(p.id) + '"' + (p.active ? ' checked' : '') + '><span>' + (p.active ? t('a.cty.on') : t('a.cty.off')) + '</span></label></td>' +
           '<td class="num"><button class="btn btn--sm" type="button" data-pedit="' + esc(p.id) + '">' + t('a.cty.edit') + '</button></td></tr>';
@@ -502,54 +504,202 @@
       return '<option value="' + esc(c.id) + '"' + (c.id === selected ? ' selected' : '') + '>' + esc(c[i18n.get()]) + (c.active ? '' : ' (' + t('a.cty.off') + ')') + '</option>';
     }).join('');
   }
+
+  /* ---------- product editor: landing page builder (media upload, variants, offers) ---------- */
+  const MAX_IMG = 8 * 1024 * 1024;
+  let draft = null, uploadTarget = null;
+
+  function blankDraft(code) {
+    const c = findCountry(code) || { currency: 'EUR' };
+    return Object.assign(GS.defaultProduct(c.currency, S.rates), {
+      id: '', name: '', rich: false, stock: 0, categoryId: '', description: '', image: '', gallery: [], colorOptions: false,
+      sizesEnabled: false, sizes: ['S', 'M', 'L', 'XL'], bundles: [], crossSellIds: [], landing: [], active: true
+    });
+  }
+  function copyDraft(p) { return JSON.parse(JSON.stringify(p)); }
+
+  // upload one file from this computer; the server keeps it on the persistent disk
+  function uploadFile(file) {
+    if (!/^image\/(jpeg|png|webp|gif)$/.test(file.type) || file.size > MAX_IMG) return Promise.reject(new Error('rejected'));
+    return fetch('/api/admin/uploads', { method: 'POST', headers: { Authorization: 'Bearer ' + S.token, 'Content-Type': file.type }, body: file })
+      .then(function (r) {
+        if (r.status === 401) { logout(); throw new Error('unauthorized'); }
+        return r.json().then(function (d) { if (!r.ok) throw new Error('rejected'); return d.url; });
+      });
+  }
+  function pickFiles(target, multiple) {
+    uploadTarget = target;
+    const inp = $('#fileInput'); inp.multiple = !!multiple; inp.click();
+  }
+  $('#fileInput').addEventListener('change', function (e) {
+    const files = Array.from(e.target.files || []); e.target.value = '';
+    const target = uploadTarget; if (!files.length || !target || !draft) return;
+    syncDraft();
+    toast(t('a.m.uploading'));
+    files.reduce(function (chain, file) {
+      return chain.then(function () {
+        return uploadFile(file).then(function (url) {
+          if (target.kind === 'primary') draft.image = url;
+          else if (target.kind === 'gallery') { if (draft.gallery.length < 8) draft.gallery.push(url); }
+          else if (target.kind === 'block' && draft.landing[target.index]) draft.landing[target.index].media = url;
+        });
+      });
+    }, Promise.resolve()).then(function () { renderMediaEditor(); renderBlocksEditor(); toast(t('a.m.uploaded')); })
+      .catch(function () { renderMediaEditor(); renderBlocksEditor(); toast(t('a.m.uploadErr')); });
+  });
+
+  function thumb(url) {
+    return '<div class="mthumb">' + (url ? '<img src="' + esc(url) + '" alt="">' : '<span class="mph">＋</span>') + '</div>';
+  }
+  function renderMediaEditor() {
+    if (!draft) return;
+    $('#mMedia').innerHTML =
+      '<div class="mrow">' + thumb(draft.image) + '<div class="mact"><b>' + t('a.m.primary') + '</b>' +
+      '<div><button type="button" class="btn btn--sm" data-act="pickPrimary">' + (draft.image ? t('a.m.replace') : t('a.m.upload')) + '</button>' +
+      (draft.image ? ' <button type="button" class="btn btn--sm btn--danger" data-act="rmPrimary">' + t('a.m.remove') + '</button>' : '') + '</div></div></div>' +
+      '<div class="mgal">' + draft.gallery.map(function (u, i) {
+        return '<div class="mthumb">' + '<img src="' + esc(u) + '" alt=""><button type="button" class="mthumb__x" data-act="rmGallery" data-i="' + i + '" aria-label="remove">×</button></div>';
+      }).join('') + (draft.gallery.length < 8 ? '<button type="button" class="mthumb mthumb--add" data-act="pickGallery">＋<small>' + t('a.m.addImages') + '</small></button>' : '') + '</div>';
+  }
+  function renderBundlesEditor() {
+    if (!draft) return;
+    $('#mBundles').innerHTML = draft.bundles.map(function (b, i) {
+      return '<div class="brow" data-brow="' + i + '">' +
+        '<label class="fld"><span>' + t('a.m.bundles.qty') + '</span><input type="number" min="1" max="10" step="1" data-b="qty" value="' + esc(b.qty) + '"></label>' +
+        '<label class="fld"><span>' + t('a.m.bundles.off') + '</span><input type="number" min="0" max="90" step="1" data-b="off" value="' + esc(b.off) + '"></label>' +
+        '<label class="fld"><span>' + t('a.m.bundles.label') + '</span><input maxlength="30" data-b="label" value="' + esc(b.label) + '"></label>' +
+        '<button type="button" class="btn btn--sm btn--danger" data-act="rmBundle" data-i="' + i + '">×</button></div>';
+    }).join('') + (draft.bundles.length < 6 ? '<button type="button" class="btn btn--sm" data-act="addBundle">' + t('a.m.bundles.add') + '</button>' : '');
+  }
+  function renderCrossEditor(code) {
+    if (!draft) return;
+    const others = S.products.filter(function (p) { return p.countryCode === code && p.id !== draft.id; });
+    const cur = (findCountry(code) || { currency: 'EUR' }).currency;
+    $('#mCross').innerHTML = others.length ? others.map(function (p) {
+      return '<label class="xrow"><input type="checkbox" data-cross="' + esc(p.id) + '"' + (draft.crossSellIds.indexOf(p.id) >= 0 ? ' checked' : '') + '>' +
+        '<span>' + esc(p.name) + '</span><small class="muted">' + loc(p.price, cur) + '</small></label>';
+    }).join('') : '<p class="muted small">' + t('a.m.cross.none') + '</p>';
+  }
+  function renderBlocksEditor() {
+    if (!draft) return;
+    $('#mBlocks').innerHTML = draft.landing.map(function (b, i) {
+      return '<div class="lrow" data-lrow="' + i + '"><div class="lrow__media">' + thumb(b.media) +
+        '<div><button type="button" class="btn btn--sm" data-act="pickBlock" data-i="' + i + '">' + (b.media ? t('a.m.replace') : t('a.m.upload')) + '</button>' +
+        (b.media ? ' <button type="button" class="btn btn--sm btn--danger" data-act="rmBlockMedia" data-i="' + i + '">' + t('a.m.remove') + '</button>' : '') + '</div></div>' +
+        '<div class="lrow__text"><label class="fld"><span>' + t('a.m.landing.heading') + '</span><input maxlength="120" data-l="title" value="' + esc(b.title) + '"></label>' +
+        '<label class="fld"><span>' + t('a.m.landing.text') + '</span><textarea maxlength="1500" data-l="text">' + esc(b.text) + '</textarea></label></div>' +
+        '<div class="lrow__act"><button type="button" class="btn btn--sm" data-act="upBlock" data-i="' + i + '"' + (i === 0 ? ' disabled' : '') + '>↑</button>' +
+        '<button type="button" class="btn btn--sm" data-act="downBlock" data-i="' + i + '"' + (i === draft.landing.length - 1 ? ' disabled' : '') + '>↓</button>' +
+        '<button type="button" class="btn btn--sm btn--danger" data-act="rmBlock" data-i="' + i + '">×</button></div></div>';
+    }).join('') + (draft.landing.length < 12 ? '<button type="button" class="btn btn--sm" data-act="addBlock">' + t('a.m.landing.add') + '</button>' : '');
+  }
+  // copy what has been typed in the repeating rows back into the draft before any re-render
+  function syncDraft() {
+    if (!draft) return;
+    $$('#mBundles [data-brow]').forEach(function (row) {
+      const b = draft.bundles[Number(row.dataset.brow)]; if (!b) return;
+      b.qty = row.querySelector('[data-b=qty]').value; b.off = row.querySelector('[data-b=off]').value; b.label = row.querySelector('[data-b=label]').value;
+    });
+    $$('#mBlocks [data-lrow]').forEach(function (row) {
+      const b = draft.landing[Number(row.dataset.lrow)]; if (!b) return;
+      b.title = row.querySelector('[data-l=title]').value; b.text = row.querySelector('[data-l=text]').value;
+    });
+  }
+
   function openProduct(ref) {
     S.editingProduct = ref;
     const p = ref.id ? S.products.find(function (x) { return x.countryCode === ref.code && x.id === ref.id; }) : null;
     if (ref.id && !p) return;
-    const c = findCountry(ref.code) || { currency: 'EUR' };
-    const base = p || Object.assign(GS.defaultProduct(c.currency, S.rates), { name: '', rich: false, stock: 0, categoryId: '' });
+    draft = p ? copyDraft(p) : blankDraft(ref.code);
+    const c = findCountry(ref.code) || { currency: 'EUR', slug: '' };
+    const base = draft;
     const num = function (label, key, val, step) {
       return '<label class="fld"><span>' + label + '</span><input name="' + key + '" type="number" min="0" step="' + step + '" value="' + esc(val) + '"></label>';
     };
-    $('#pdlgBody').innerHTML = '<div class="d"><div class="d__head"><h2>' + (p ? esc(p.name) : t('a.prod.new')) + '</h2>' +
-      '<button class="btn btn--sm" type="button" data-act="close">' + t('a.cty.close') + '</button></div>' +
+    const section = function (title, hintKey, inner) {
+      return '<section class="msec"><h3>' + title + '</h3>' + (hintKey ? '<p class="muted small">' + t(hintKey) + '</p>' : '') + inner + '</section>';
+    };
+    $('#pdlgBody').innerHTML = '<div class="d"><div class="d__head"><h2>' + (p ? esc(p.name) : t('a.prod.new')) + '</h2><div class="d__head-act">' +
+      (p ? '<a class="btn btn--sm" target="_blank" rel="noopener" href="/' + esc(c.slug) + '/' + esc(p.id) + '">' + t('a.m.preview') + '</a> ' : '') +
+      '<button class="btn btn--sm" type="button" data-act="close">' + t('a.cty.close') + '</button></div></div>' +
       '<form id="pform" class="pform" novalidate>' +
       '<label class="fld"><span>' + t('a.prod.country') + '</span><select name="countryCode"' + (p ? ' disabled title="' + esc(t('a.prod.locked')) + '"' : '') + '>' + countryOptions(ref.code, t('a.pick.ph')) + '</select></label>' +
       '<label class="fld"><span>' + t('a.prod.category') + '</span><select name="categoryId">' + categoryOptions(ref.code, base.categoryId) + '</select></label>' +
       '<label class="fld fld--full"><span>' + t('a.prod.name') + '</span><input name="name" maxlength="80" value="' + esc(base.name) + '"></label>' +
-      '<label class="fld fld--full"><span>' + t('a.prod.image') + '</span><input name="image" maxlength="500" placeholder="https://… / /media/…" value="' + esc(base.image) + '"></label>' +
       '<label class="fld fld--full"><span>' + t('a.prod.desc') + '</span><textarea name="description" maxlength="2000">' + esc(base.description) + '</textarea></label>' +
-      '<label class="fld fld--check fld--full"><input type="checkbox" name="colorOptions"' + (base.colorOptions ? ' checked' : '') + '><span>' + t('a.prod.colors') + '</span></label>' +
+      '<label class="fld fld--check fld--full"><input type="checkbox" name="active"' + (base.active ? ' checked' : '') + '><span>' + t('a.m.published') + '</span></label>' +
       num(t('a.prod.price') + ' (<b id="pcur">' + esc(c.currency) + '</b>)', 'price', base.price, 'any') + num(t('a.prod.compare'), 'compare', base.compare, 'any') +
       num(t('a.prod.shipping'), 'shipping', base.shipping, 'any') + num(t('a.prod.free'), 'freeShippingQty', base.freeShippingQty, '1') +
-      num(t('a.prod.stock'), 'stock', base.stock, '1') +
-      '<label class="fld fld--check"><input type="checkbox" name="active"' + (base.active ? ' checked' : '') + '><span>' + t('a.prod.active') + '</span></label>' +
-      '</form><p class="muted small">' + t('a.prod.hint', { cur: esc(c.currency) }) + '</p>' +
+      num(t('a.prod.stock'), 'stock', base.stock, '1') + '</form>' +
+      section(t('a.m.media'), 'a.m.media.hint', '<div class="mbox" id="mMedia" data-f="image"></div>') +
+      section(t('a.m.variants'), null,
+        '<div class="vgrid"><label class="fld fld--check"><input type="checkbox" id="sizesOn"' + (base.sizesEnabled ? ' checked' : '') + '><span>' + t('a.m.sizes.enable') + '</span></label>' +
+        '<label class="fld"><span>' + t('a.m.sizes.list') + '</span><input id="sizesList" maxlength="80" value="' + esc(base.sizes.join(', ')) + '"' + (base.sizesEnabled ? '' : ' disabled') + ' data-f="sizes"></label>' +
+        '<label class="fld fld--check"><input type="checkbox" id="colorsOn"' + (base.colorOptions ? ' checked' : '') + '><span>' + t('a.prod.colors') + '</span></label></div>') +
+      section(t('a.m.bundles.title'), 'a.m.bundles.hint', '<div class="mbox" id="mBundles" data-f="bundles"></div>') +
+      section(t('a.m.cross.title'), 'a.m.cross.hint', '<div class="mbox" id="mCross" data-f="crossSellIds"></div>') +
+      section(t('a.m.landing.title'), 'a.m.landing.hint', '<div class="mbox" id="mBlocks" data-f="landing"></div>') +
+      '<p class="muted small">' + t('a.prod.hint', { cur: esc(c.currency) }) + '</p>' +
       '<div class="d__actions"><button class="btn btn--primary" type="button" data-act="saveProduct">' + t('a.prod.save') + '</button>' +
       (p ? '<button class="btn btn--danger" type="button" data-act="delProduct">' + t('a.prod.delete') + '</button>' : '') + '</div></div>';
+    renderMediaEditor(); renderBundlesEditor(); renderCrossEditor(ref.code); renderBlocksEditor();
     const dlg = $('#pdlg'); if (!dlg.open) dlg.showModal();
   }
+
   $('#pdlg').addEventListener('change', function (e) {
-    if (e.target.name !== 'countryCode') return;
-    // choosing the country loads that country's own categories and currency
-    const code = e.target.value, f = $('#pform').elements, c = findCountry(code);
-    f.categoryId.innerHTML = categoryOptions(code, '');
-    $('#pcur').textContent = c ? c.currency : '';
-    if (c && S.editingProduct && !S.editingProduct.id) {
-      const d = GS.defaultProduct(c.currency, S.rates);
-      f.price.value = d.price; f.compare.value = d.compare; f.shipping.value = d.shipping;
+    const el = e.target;
+    if (el.name === 'countryCode') {
+      // choosing the country loads that country's own categories, currency and complementary products
+      syncDraft();
+      const code = el.value, f = $('#pform').elements, c = findCountry(code);
+      f.categoryId.innerHTML = categoryOptions(code, '');
+      $('#pcur').textContent = c ? c.currency : '';
+      draft.crossSellIds = [];
+      renderCrossEditor(code);
+      if (c && S.editingProduct && !S.editingProduct.id) {
+        const d = GS.defaultProduct(c.currency, S.rates);
+        f.price.value = d.price; f.compare.value = d.compare; f.shipping.value = d.shipping;
+      }
+    }
+    if (el.id === 'sizesOn') $('#sizesList').disabled = !el.checked;
+    if (el.dataset && el.dataset.cross && draft) {
+      const i = draft.crossSellIds.indexOf(el.dataset.cross);
+      if (el.checked && i < 0) draft.crossSellIds.push(el.dataset.cross);
+      if (!el.checked && i >= 0) draft.crossSellIds.splice(i, 1);
     }
   });
   $('#pdlg').addEventListener('click', function (e) {
     const dlg = $('#pdlg');
     if (e.target === dlg) { dlg.close(); return; }
     const b = e.target.closest('[data-act]'); if (!b) return;
-    const ref = S.editingProduct, f = $('#pform') && $('#pform').elements;
-    if (b.dataset.act === 'close') { dlg.close(); return; }
-    if (b.dataset.act === 'saveProduct') {
+    const act = b.dataset.act, ref = S.editingProduct, i = Number(b.dataset.i);
+    if (act === 'close') { dlg.close(); return; }
+    if (!draft) return;
+    const edit = function (fn) { syncDraft(); fn(); renderMediaEditor(); renderBundlesEditor(); renderBlocksEditor(); };
+    if (act === 'pickPrimary') return pickFiles({ kind: 'primary' }, false);
+    if (act === 'rmPrimary') return edit(function () { draft.image = ''; });
+    if (act === 'pickGallery') return pickFiles({ kind: 'gallery' }, true);
+    if (act === 'rmGallery') return edit(function () { draft.gallery.splice(i, 1); });
+    if (act === 'addBundle') return edit(function () { draft.bundles.push({ qty: draft.bundles.length ? Number(draft.bundles[draft.bundles.length - 1].qty) + 1 : 2, off: 10, label: '' }); });
+    if (act === 'rmBundle') return edit(function () { draft.bundles.splice(i, 1); });
+    if (act === 'addBlock') return edit(function () { draft.landing.push({ title: '', text: '', media: '' }); });
+    if (act === 'rmBlock') return edit(function () { draft.landing.splice(i, 1); });
+    if (act === 'rmBlockMedia') return edit(function () { draft.landing[i].media = ''; });
+    if (act === 'pickBlock') return pickFiles({ kind: 'block', index: i }, false);
+    if (act === 'upBlock' || act === 'downBlock') {
+      return edit(function () {
+        const j = act === 'upBlock' ? i - 1 : i + 1;
+        if (j >= 0 && j < draft.landing.length) { const x = draft.landing[i]; draft.landing[i] = draft.landing[j]; draft.landing[j] = x; }
+      });
+    }
+    if (act === 'saveProduct') {
+      syncDraft();
+      const f = $('#pform').elements;
       const body = {
-        categoryId: f.categoryId.value, name: f.name.value, image: f.image.value, description: f.description.value, colorOptions: f.colorOptions.checked,
-        price: f.price.value, compare: f.compare.value, shipping: f.shipping.value, freeShippingQty: f.freeShippingQty.value, stock: f.stock.value, active: f.active.checked
+        categoryId: f.categoryId.value, name: f.name.value, description: f.description.value, active: f.active.checked,
+        image: draft.image, gallery: draft.gallery, colorOptions: $('#colorsOn').checked, sizesEnabled: $('#sizesOn').checked, sizes: $('#sizesList').value,
+        bundles: draft.bundles.map(function (x) { return { qty: x.qty, off: x.off, label: x.label }; }), crossSellIds: draft.crossSellIds, landing: draft.landing,
+        price: f.price.value, compare: f.compare.value, shipping: f.shipping.value, freeShippingQty: f.freeShippingQty.value, stock: f.stock.value
       };
       if (!ref.id) body.countryCode = f.countryCode.value;
       const req = ref.id
@@ -561,13 +711,13 @@
         dlg.close(); renderAll(); renderProducts(true); toast(t('a.prod.saved'));
       }).catch(function (x) { if (x.fields) { markBad(dlg, x.fields); failToast(x); } });
     }
-    if (b.dataset.act === 'delProduct' && confirm(t('a.prod.confirmDelete'))) {
+    if (act === 'delProduct' && confirm(t('a.prod.confirmDelete'))) {
       api('DELETE', '/api/admin/products/' + encodeURIComponent(ref.code) + '/' + encodeURIComponent(ref.id)).then(function (d) {
         applySnap(d); dlg.close(); renderAll(); renderProducts(true);
       }).catch(function () {});
     }
   });
-  $('#pdlg').addEventListener('close', function () { S.editingProduct = null; });
+  $('#pdlg').addEventListener('close', function () { S.editingProduct = null; draft = null; });
 
   /* ---------- CSV export ---------- */
   function cell(v) {
@@ -576,10 +726,10 @@
     return '"' + s.replace(/"/g, '""') + '"';
   }
   $('#export').addEventListener('click', function () {
-    const head = ['id', 'date', 'status', 'name', 'phone', 'email', 'region', 'country', 'city', 'address', 'product', 'color', 'qty', 'extras', 'currency', 'total_local', 'total_eur', 'note'];
+    const head = ['id', 'date', 'status', 'name', 'phone', 'email', 'region', 'country', 'city', 'address', 'product', 'color', 'size', 'addons', 'qty', 'extras', 'currency', 'total_local', 'total_eur', 'note'];
     const rows = filtered().map(function (o) {
       return [o.id, o.createdAt, o.status, o.customer.name, o.customer.phone, o.customer.email, o.shipping.region, o.shipping.country,
-        o.shipping.city, o.shipping.address, o.productName || '', o.color || '', o.qty, o.cross.join('+'), o.currency, o.amounts.total, o.totalEUR, o.note].map(cell).join(',');
+        o.shipping.city, o.shipping.address, o.productName || '', o.color || '', o.size || '', (o.addons || []).map(function (x) { return x.name; }).join('+'), o.qty, o.cross.join('+'), o.currency, o.amounts.total, o.totalEUR, o.note].map(cell).join(',');
     });
     const blob = new Blob(['﻿' + [head.join(',')].concat(rows).join('\r\n')], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');

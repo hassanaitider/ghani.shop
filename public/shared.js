@@ -121,10 +121,21 @@
     return off;
   }
 
+  // A product's quantity offers: [{ qty, off (percent), label }]. The highest tier the quantity reaches applies.
+  function bundleOff(bundles, qty) {
+    let off = 0, best = 0;
+    (bundles || []).forEach(function (b) { if (qty >= b.qty && b.qty >= best) { best = b.qty; off = Number(b.off) / 100; } });
+    return off;
+  }
+  function defaultBundles() {
+    return BUNDLES.map(function (b) { return { qty: b.qty, off: Math.round(b.off * 100), label: '' }; });
+  }
+
   /* A country's own product (prices already in the country's currency). */
   function defaultProduct(cur, rates) {
     return {
       id: PRODUCT.id, name: 'SolarGlow 3-en-1', active: true, rich: true, categoryId: null, description: '', image: '', colorOptions: false,
+      gallery: [], sizesEnabled: false, sizes: ['S', 'M', 'L', 'XL'], bundles: defaultBundles(), crossSellIds: [], landing: [],
       stock: PRODUCT.initialStock,
       price: conv(PRODUCT.priceEUR, cur, rates), compare: conv(PRODUCT.compareEUR, cur, rates),
       shipping: conv(PRODUCT.shippingEUR, cur, rates), freeShippingQty: PRODUCT.freeShippingQty
@@ -141,7 +152,7 @@
     const unit = p ? Number(p.price) : conv(PRODUCT.priceEUR, cur, rates);
     const compareUnit = p ? Number(p.compare) : conv(PRODUCT.compareEUR, cur, rates);
     const subtotal = unit * qty;
-    const off = p && !p.rich ? 0 : discountFor(qty); // bundle discounts belong to the SolarGlow offer only
+    const off = p ? bundleOff(p.bundles, qty) : discountFor(qty); // a product's own quantity offers
     const discount = round(subtotal * off, cur);
     const crossIds = Array.from(new Set(o.cross || [])).filter(function (id) {
       return CROSS.some(function (c) { return c.id === id; });
@@ -154,10 +165,13 @@
     const freeQty = p ? Number(p.freeShippingQty) : PRODUCT.freeShippingQty;
     const shipCost = p ? Number(p.shipping) : conv(PRODUCT.shippingEUR, cur, rates);
     const shipping = qty >= freeQty ? 0 : shipCost;
-    const total = subtotal - discount + crossTotal + shipping;
+    // complementary products added to the order (the caller passes their local prices)
+    const addonLines = (o.addons || []).map(function (a) { return { id: a.id, name: a.name, price: Number(a.price) }; });
+    const addonTotal = addonLines.reduce(function (sum, l) { return sum + l.price; }, 0);
+    const total = subtotal - discount + crossTotal + addonTotal + shipping;
     return {
       currency: cur, qty: qty, off: off, unit: unit, compareUnit: compareUnit,
-      subtotal: subtotal, discount: discount, cross: crossLines, crossTotal: crossTotal,
+      subtotal: subtotal, discount: discount, cross: crossLines, crossTotal: crossTotal, addons: addonLines, addonTotal: addonTotal,
       shipping: shipping, total: Number(total.toFixed(CURRENCIES[cur].dec)),
       totalEUR: Number((total / rateOf(cur, rates)).toFixed(2))
     };
@@ -180,6 +194,6 @@
   return {
     PRODUCT: PRODUCT, BUNDLES: BUNDLES, CROSS: CROSS, CURRENCIES: CURRENCIES,
     COUNTRIES: COUNTRIES, STATUSES: STATUSES,
-    quote: quote, format: format, conv: conv, country: country, rateOf: rateOf, defaultProduct: defaultProduct
+    quote: quote, bundleOff: bundleOff, format: format, conv: conv, country: country, rateOf: rateOf, defaultProduct: defaultProduct
   };
 });

@@ -41,7 +41,7 @@
   <div class="container hero__grid">
     <div class="gallery" aria-label="Product gallery">
       <div class="stage" id="stage"></div>
-      <div class="thumbs" id="thumbs" role="tablist" data-rich></div>
+      <div class="thumbs" id="thumbs" role="tablist"></div>
     </div>
 
     <div class="hero__info">
@@ -95,6 +95,9 @@
     </div>
   </div>
 </section>
+
+<!-- ========== LANDING PAGE BLOCKS (built in the admin) ========== -->
+<section class="landing" id="landing" hidden></section>
 
 <!-- ========== PAIN ========== -->
 <section class="section section--dark" id="pain" data-rich>
@@ -225,7 +228,7 @@
 
     <div class="order" id="orderWrap">
       <form id="orderForm" novalidate autocomplete="on">
-                <div class="bundles" id="bundles" data-rich></div>
+                <div class="bundles" id="bundles"></div>
 
         <div class="qty">
           <span data-i18n="qty.label"></span>
@@ -243,6 +246,8 @@
             <select name="country" required autocomplete="country"></select><em class="err" data-i18n="f.err"></em></label>
           <label class="field"><span data-i18n="f.phone"></span>
             <div class="phone"><i id="dial">+</i><input name="phone" type="tel" inputmode="tel" required maxlength="20" autocomplete="tel-national"></div><em class="err" data-i18n="f.err"></em></label>
+          <label class="field" id="sizeField" hidden><span data-i18n="f.size"></span>
+            <select name="size"></select><em class="err" data-i18n="f.err"></em></label>
           <label class="field field--full" id="colorField" hidden><span data-i18n="f.color"></span>
             <input name="color" maxlength="40" data-i18n-ph="f.color.ph"><em class="err" data-i18n="f.err"></em></label>
           <label class="field"><span data-i18n="f.city"></span>
@@ -255,6 +260,8 @@
             <input name="note" maxlength="300" data-i18n-ph="f.note.ph"></label>
           <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
         </div>
+
+        <div class="addons" id="addons" hidden></div>
 
         <div class="summary" id="summary" aria-live="polite"></div>
 
