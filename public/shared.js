@@ -34,6 +34,11 @@
     XAF: { sym: 'FCFA', dec: 0, step: 500, rate: 655.957, fixed: true, group: 'central' },
     XOF: { sym: 'FCFA', dec: 0, step: 500, rate: 655.957, fixed: true, group: 'africa' },
     MAD: { sym: 'MAD', dec: 0, step: 5, rate: 10.8, group: 'africa' },
+    TZS: { sym: 'TSh', dec: 0, step: 500, rate: 2900, group: 'africa' },
+    ZMW: { sym: 'ZK', dec: 0, step: 5, rate: 29, group: 'africa' },
+    UGX: { sym: 'USh', dec: 0, step: 500, rate: 4000, group: 'africa' },
+    SSP: { sym: 'SSP', dec: 0, step: 500, rate: 6000, group: 'africa' },
+    MKD: { sym: 'ден', dec: 0, step: 10, rate: 61.5, group: 'eeurope' },
     CDF: { sym: 'FC', dec: 0, step: 500, rate: 2900, group: 'central' },
     NGN: { sym: '₦', dec: 0, step: 500, rate: 1700, group: 'africa' },
     GHS: { sym: 'GH₵', dec: 0, step: 5, rate: 16, group: 'africa' },
@@ -68,12 +73,25 @@
     ['ZA', 'South Africa', 'Afrique du Sud', 'africa', 'ZAR', '27'],
     ['PL', 'Poland', 'Pologne', 'eeurope', 'PLN', '48'],
     ['RO', 'Romania', 'Roumanie', 'eeurope', 'RON', '40'],
-    ['CZ', 'Czechia', 'Tchéquie', 'eeurope', 'CZK', '420'],
+    ['CZ', 'Czech Republic', 'République tchèque', 'eeurope', 'CZK', '420'],
     ['HU', 'Hungary', 'Hongrie', 'eeurope', 'HUF', '36'],
     ['BG', 'Bulgaria', 'Bulgarie', 'eeurope', 'BGN', '359'],
     ['RS', 'Serbia', 'Serbie', 'eeurope', 'RSD', '381'],
     ['UA', 'Ukraine', 'Ukraine', 'eeurope', 'UAH', '380'],
     ['SK', 'Slovakia', 'Slovaquie', 'eeurope', 'EUR', '421'],
+    ['TZ', 'Tanzania', 'Tanzanie', 'africa', 'TZS', '255'],
+    ['ZM', 'Zambia', 'Zambie', 'africa', 'ZMW', '260'],
+    ['UG', 'Uganda', 'Ouganda', 'africa', 'UGX', '256'],
+    ['SS', 'South Sudan', 'Soudan du Sud', 'africa', 'SSP', '211'],
+    ['SI', 'Slovenia', 'Slovénie', 'eeurope', 'EUR', '386'],
+    ['HR', 'Croatia', 'Croatie', 'eeurope', 'EUR', '385'],
+    ['MK', 'North Macedonia', 'Macédoine du Nord', 'eeurope', 'MKD', '389'],
+    ['ES', 'Spain', 'Espagne', 'other', 'EUR', '34'],
+    ['AT', 'Austria', 'Autriche', 'other', 'EUR', '43'],
+    ['DE', 'Germany', 'Allemagne', 'other', 'EUR', '49'],
+    ['GR', 'Greece', 'Grèce', 'other', 'EUR', '30'],
+    ['IT', 'Italy', 'Italie', 'other', 'EUR', '39'],
+    ['PT', 'Portugal', 'Portugal', 'other', 'EUR', '351'],
     ['FR', 'France', 'France', 'other', 'EUR', '33']
   ].map(function (c) {
     return { code: c[0], en: c[1], fr: c[2], region: c[3], currency: c[4], dial: c[5] };
@@ -106,7 +124,8 @@
   /* A country's own product (prices already in the country's currency). */
   function defaultProduct(cur, rates) {
     return {
-      id: PRODUCT.id, name: 'SolarGlow 3-en-1', active: true, stock: PRODUCT.initialStock,
+      id: PRODUCT.id, name: 'SolarGlow 3-en-1', active: true, rich: true, categoryId: null, description: '', image: '', colorOptions: false,
+      stock: PRODUCT.initialStock,
       price: conv(PRODUCT.priceEUR, cur, rates), compare: conv(PRODUCT.compareEUR, cur, rates),
       shipping: conv(PRODUCT.shippingEUR, cur, rates), freeShippingQty: PRODUCT.freeShippingQty
     };
@@ -122,7 +141,7 @@
     const unit = p ? Number(p.price) : conv(PRODUCT.priceEUR, cur, rates);
     const compareUnit = p ? Number(p.compare) : conv(PRODUCT.compareEUR, cur, rates);
     const subtotal = unit * qty;
-    const off = discountFor(qty);
+    const off = p && !p.rich ? 0 : discountFor(qty); // bundle discounts belong to the SolarGlow offer only
     const discount = round(subtotal * off, cur);
     const crossIds = Array.from(new Set(o.cross || [])).filter(function (id) {
       return CROSS.some(function (c) { return c.id === id; });

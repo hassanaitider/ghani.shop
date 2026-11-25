@@ -9,7 +9,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%230b1220'/%3E%3Ccircle cx='32' cy='32' r='12' fill='%23ffb81c'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="/styles.css">
 </head>
-<body>
+<body class="pending">
 
 <!-- ========== NAV ========== -->
 <header class="nav" id="top">
@@ -18,14 +18,14 @@
       <span class="logo__mark" data-icon="zap"></span>
       <span class="logo__txt">Ghani<b>Shop</b></span>
     </a>
-    <nav class="nav__links" aria-label="Main">
+    <nav class="nav__links" aria-label="Main" data-rich>
       <a href="#demo" data-i18n="nav.demo"></a>
       <a href="#benefits" data-i18n="nav.benefits"></a>
       <a href="#reviews" data-i18n="nav.reviews"></a>
       <a href="#faq" data-i18n="nav.faq"></a>
     </nav>
     <div class="nav__tools">
-      <a id="changeCountry" class="btn btn--ghost btn--sm" href="/"></a>
+      <a id="changeCountry" class="btn btn--ghost btn--sm" href="/" data-i18n-aria="country.change"></a>
       <div class="seg" role="group" aria-label="Language">
         <button type="button" class="seg__b" data-lang="fr">FR</button>
         <button type="button" class="seg__b" data-lang="en">EN</button>
@@ -41,13 +41,13 @@
   <div class="container hero__grid">
     <div class="gallery" aria-label="Product gallery">
       <div class="stage" id="stage"></div>
-      <div class="thumbs" id="thumbs" role="tablist"></div>
+      <div class="thumbs" id="thumbs" role="tablist" data-rich></div>
     </div>
 
     <div class="hero__info">
-      <span class="pill" data-i18n="hero.badge"></span>
+      <span class="pill" data-i18n="hero.badge" data-rich></span>
       <h1 data-i18n-html="hero.title"></h1>
-      <div class="rating">
+      <div class="rating" data-rich>
         <span class="stars" data-stars="5"></span>
         <span class="rating__txt"><b>4.8</b> · <span id="reviewCount">1 284</span></span>
       </div>
@@ -65,7 +65,7 @@
             <span class="tag tag--green" id="saveTag"></span>
           </div>
         </div>
-        <div class="value">
+        <div class="value" data-rich>
           <div class="value__title" data-i18n="value.title"></div>
           <div class="value__row"><span data-icon="battery"></span><span data-i18n="value.powerbank"></span><s data-eur="34.9"></s></div>
           <div class="value__row"><span data-icon="sun"></span><span data-i18n="value.solar"></span><s data-eur="24.9"></s></div>
@@ -97,7 +97,7 @@
 </section>
 
 <!-- ========== PAIN ========== -->
-<section class="section section--dark" id="pain">
+<section class="section section--dark" id="pain" data-rich>
   <div class="container">
     <div class="head head--light">
       <span class="eyebrow" data-i18n="pain.eyebrow"></span>
@@ -113,7 +113,7 @@
 </section>
 
 <!-- ========== DEMO (looping animations / GIFs) ========== -->
-<section class="section" id="demo">
+<section class="section" id="demo" data-rich>
   <div class="container">
     <div class="head">
       <span class="eyebrow" data-i18n="demo.eyebrow"></span>
@@ -124,7 +124,7 @@
 </section>
 
 <!-- ========== BENEFITS ========== -->
-<section class="section section--soft" id="benefits">
+<section class="section section--soft" id="benefits" data-rich>
   <div class="container">
     <div class="head">
       <span class="eyebrow" data-i18n="ben.eyebrow"></span>
@@ -170,7 +170,7 @@
 </section>
 
 <!-- ========== REVIEWS ========== -->
-<section class="section" id="reviews">
+<section class="section" id="reviews" data-rich>
   <div class="container">
     <div class="head">
       <span class="eyebrow" data-i18n="rev.eyebrow"></span>
@@ -186,7 +186,7 @@
 </section>
 
 <!-- ========== FAQ ========== -->
-<section class="section section--soft" id="faq">
+<section class="section section--soft" id="faq" data-rich>
   <div class="container container--narrow">
     <div class="head">
       <span class="eyebrow" data-i18n="faq.eyebrow"></span>
@@ -204,7 +204,7 @@
 </section>
 
 <!-- ========== CROSS-SELL ========== -->
-<section class="section" id="cross">
+<section class="section" id="cross" data-rich>
   <div class="container">
     <div class="head">
       <span class="eyebrow" data-i18n="cross.eyebrow"></span>
@@ -225,10 +225,7 @@
 
     <div class="order" id="orderWrap">
       <form id="orderForm" novalidate autocomplete="on">
-        <label class="field" id="productPick" hidden><span data-i18n="f.product"></span>
-          <select name="product"></select></label>
-
-        <div class="bundles" id="bundles"></div>
+                <div class="bundles" id="bundles" data-rich></div>
 
         <div class="qty">
           <span data-i18n="qty.label"></span>
@@ -246,6 +243,8 @@
             <select name="country" required autocomplete="country"></select><em class="err" data-i18n="f.err"></em></label>
           <label class="field"><span data-i18n="f.phone"></span>
             <div class="phone"><i id="dial">+</i><input name="phone" type="tel" inputmode="tel" required maxlength="20" autocomplete="tel-national"></div><em class="err" data-i18n="f.err"></em></label>
+          <label class="field field--full" id="colorField" hidden><span data-i18n="f.color"></span>
+            <input name="color" maxlength="40" data-i18n-ph="f.color.ph"><em class="err" data-i18n="f.err"></em></label>
           <label class="field"><span data-i18n="f.city"></span>
             <input name="city" required maxlength="80" autocomplete="address-level2"><em class="err" data-i18n="f.err"></em></label>
           <label class="field field--full"><span data-i18n="f.address"></span>

@@ -9,7 +9,8 @@
   const MEDIA = { cut: null, charge: null, solar: null, sos: null };
 
   /* Each country has its own page (/ma, /ci, …), currency, prices, stock and product catalog. */
-  const SLUG = location.pathname.replace(/^\/+|\/+$/g, '').toLowerCase();
+  const PARTS = location.pathname.split('/').filter(Boolean);
+  const SLUG = (PARTS[0] || '').toLowerCase(), PID = PARTS[1] || '';
   const state = { cur: 'EUR', rates: {}, qty: 1, cross: new Set(), country: null, products: [], product: null, scene: 'cut' };
 
   /* ---------------- icons ---------------- */
@@ -98,6 +99,13 @@
 
   const GALLERY = ['cut', 'charge', 'solar', 'sos'];
   function renderGallery() {
+    if (isPlain()) {
+      $('#stage').innerHTML = state.product.image
+        ? '<img class="scene scene--img" src="' + esc(state.product.image) + '" alt="' + esc(state.product.name) + '">'
+        : '<div class="stage__ph" aria-hidden="true">⚡</div>';
+      $('#thumbs').innerHTML = '';
+      return;
+    }
     $('#stage').innerHTML = sceneHTML(state.scene);
     $('#thumbs').innerHTML = GALLERY.map(function (n, i) {
       return '<button type="button" role="tab" class="thumb' + (n === state.scene ? ' is-active' : '') + '" data-scene="' + n + '" aria-selected="' + (n === state.scene) + '">' +
@@ -137,41 +145,54 @@
     $('#stockBox').classList.toggle('is-low', n <= 25);
     $('#submitBtn').disabled = n <= 0;
   }
-  function pickProduct(id) {
-    state.product = state.products.find(function (p) { return p.id === id; }) || state.products[0] || null;
+  function isPlain() { return !!state.product && !state.product.rich; }
+  function pickProduct() {
+    state.product = state.products.find(function (p) { return p.id === PID; }) || null;
+    if (!state.product) { location.replace('/' + SLUG); return; }
     state.qty = Math.min(state.qty, Math.max(1, stockLeft()));
+  }
+  // Title and primary image come first, then the description. SolarGlow keeps its full marketing page.
+  let contentFor = null;
+  function renderProductContent() {
+    const p = state.product; if (!p) return;
+    document.body.classList.toggle('plain', !p.rich);
+    $('#colorField').hidden = !p.colorOptions;
+    document.title = p.name + ' — Ghani Shop';
+    if (contentFor !== p.id && !p.rich) {
+      const h1 = $('.hero__info h1'), lead = $('.hero__info .lead');
+      [h1, lead].forEach(function (el) { el.removeAttribute('data-i18n'); el.removeAttribute('data-i18n-html'); });
+      h1.textContent = p.name; lead.textContent = p.description || '';
+      lead.hidden = !p.description;
+    }
+    if (!p.rich) { $('.hero__info h1').textContent = p.name; $('.hero__info .lead').textContent = p.description || ''; }
+    contentFor = p.id;
+    renderGallery();
   }
   function esc(v) {
     return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
-  function renderProductPick() {
-    const box = $('#productPick'), sel = $('#orderForm').elements.product;
-    box.hidden = state.products.length < 2;
-    sel.innerHTML = state.products.map(function (p) {
-      return '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>';
-    }).join('');
-    if (state.product) sel.value = state.product.id;
-  }
   function flag(code) {
     return String(code).toUpperCase().replace(/./g, function (ch) { return String.fromCodePoint(127397 + ch.charCodeAt(0)); });
   }
   function renderChangeCountry() {
     const a = $('#changeCountry');
-    a.textContent = state.country ? flag(state.country.code) + ' ' + state.country[i18n.get()] : '';
+    a.textContent = state.country ? (state.country.flag || flag(state.country.code)) + ' ' + state.country[i18n.get()] : '';
+    if (state.country) a.href = '/' + state.country.slug;
   }
   function loadConfig() {
     return fetch('/api/config?country=' + encodeURIComponent(SLUG), { cache: 'no-store' }).then(function (r) {
       if (r.status === 404) { location.replace('/'); throw new Error('unknown country'); }
       return r.json();
     }).then(function (c) {
-      const keep = state.product && state.product.id;
       state.country = c.country; state.cur = c.country.currency; state.rates = c.rates || {};
-      state.products = c.products; pickProduct(keep);
+      state.products = c.products; pickProduct();
+      if (!state.product) return;
       document.documentElement.dataset.country = c.country.code;
-      renderChangeCountry(); renderCountries(); renderProductPick(); renderStock(); renderPrices();
-    }).catch(function () { /* offline: keep what is on screen */ });
+      renderChangeCountry(); renderCountries(); renderProductContent(); renderStock(); renderPrices();
+    }).catch(function () { /* offline: keep what is on screen */ })
+      .then(function () { document.body.classList.remove('pending'); });
   }
 
   /* ---------------- FAQ ---------------- */
@@ -228,7 +249,7 @@
   function renderSummary() {
     const q = currentQuote();
     let h = '<h4>' + t('sum.title') + '</h4>' +
-      row(t('sum.product', { n: q.qty }), fmt(q.subtotal));
+      row(isPlain() ? esc(state.product.name) + ' × ' + q.qty : t('sum.product', { n: q.qty }), fmt(q.subtotal));
     if (q.discount) h += row(t('sum.discount') + ' (−' + Math.round(q.off * 100) + '%)', '−' + fmt(q.discount), 'green');
     q.cross.forEach(function (l) { h += row(t('cs.' + l.id), fmt(l.price)); });
     h += row(t('sum.shipping'), q.shipping ? fmt(q.shipping) : t('sum.free'), q.shipping ? '' : 'green');
@@ -262,6 +283,7 @@
       phone: v('phone').replace(/\D/g, '').length < 6,
       city: v('city').length < 2,
       address: v('address').length < 5,
+      color: !$('#colorField').hidden && v('color').length < 1,
       email: !!v('email') && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v('email'))
     };
     let first = null;
@@ -285,7 +307,7 @@
       name: form.elements.name.value, phone: form.elements.phone.value, country: form.elements.country.value,
       city: form.elements.city.value, address: form.elements.address.value, email: form.elements.email.value,
       note: form.elements.note.value, website: form.elements.website.value,
-      productId: state.product && state.product.id, qty: state.qty, cross: Array.from(state.cross), lang: i18n.get()
+      productId: state.product && state.product.id, color: form.elements.color.value, qty: state.qty, cross: Array.from(state.cross), lang: i18n.get()
     };
     fetch('/api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       .then(function (r) { return r.json().then(function (d) { return { status: r.status, d: d }; }); })
@@ -317,7 +339,7 @@
 
   /* ---------------- boot ---------------- */
   function renderAll() {
-    renderGallery(); renderDemo(); renderCountries(); renderChangeCountry(); renderProductPick();
+    renderGallery(); renderDemo(); renderCountries(); renderChangeCountry(); renderProductContent();
     paintIcons(); renderStock(); renderPrices(); renderConfirm();
     $('#reviewCount').textContent = t('hero.reviews', { n: '1 284' });
     $$('[data-lang]').forEach(function (b) { b.classList.toggle('is-active', b.dataset.lang === i18n.get()); });
@@ -330,9 +352,6 @@
 
     document.addEventListener('langchange', function () { renderAll(); });
     $$('[data-lang]').forEach(function (b) { b.addEventListener('click', function () { i18n.set(b.dataset.lang); }); });
-    $('#orderForm').elements.product.addEventListener('change', function (e) {
-      pickProduct(e.target.value); renderStock(); renderPrices();
-    });
     $('#thumbs').addEventListener('click', function (e) {
       const b = e.target.closest('[data-scene]'); if (!b) return;
       state.scene = b.dataset.scene; renderGallery();
@@ -354,7 +373,7 @@
     form.addEventListener('submit', submit);
     $('#again').addEventListener('click', function () {
       form.reset(); state.cross.clear(); state.qty = 1; lastOrder = null;
-      renderCountries(); renderProductPick(); $('#confirm').hidden = true; form.hidden = false;
+      renderCountries(); $('#confirm').hidden = true; form.hidden = false;
       renderCross(); renderBundles(); renderSummary();
     });
 

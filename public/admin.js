@@ -6,7 +6,7 @@
   const REGIONS = ['central', 'africa', 'eeurope', 'other'];
   const INACTIVE = ['cancelled', 'returned'];
 
-  const S = { token: null, orders: [], countries: [], rates: {}, open: null, editing: null, tab: 'dashboard' };
+  const S = { token: null, orders: [], countries: [], categories: [], products: [], rates: {}, open: null, editing: null, editingProduct: null, catCountry: '', prodCountry: '', tab: 'dashboard' };
   try { S.token = sessionStorage.getItem('gs_admin'); } catch (e) { /* ignore */ }
 
   function esc(v) {
@@ -30,6 +30,16 @@
     if (order && order.shipping.countryName) return order.shipping.countryName[i18n.get()] || code;
     return code;
   }
+  function categoriesOf(code) {
+    return S.categories.filter(function (c) { return c.countryCode === code; }).sort(function (a, b) { return a.order - b.order; });
+  }
+  function productsOf(code) { return S.products.filter(function (p) { return p.countryCode === code; }); }
+  // every mutating call returns the full countries/categories/products snapshot
+  function applySnap(d) {
+    if (d.countries) S.countries = d.countries;
+    if (d.categories) S.categories = d.categories;
+    if (d.products) S.products = d.products;
+  }
   function toast(msg) {
     const el = $('#toast'); el.textContent = msg; el.hidden = false;
     clearTimeout(toast.t); toast.t = setTimeout(function () { el.hidden = true; }, 2400);
@@ -51,7 +61,7 @@
   }
   function load() {
     return api('GET', '/api/admin/data').then(function (d) {
-      S.orders = d.orders; S.rates = d.rates || {}; S.countries = d.countries || [];
+      S.orders = d.orders; S.rates = d.rates || {}; applySnap(d);
       renderAll();
     });
   }
@@ -217,7 +227,7 @@
     return api('PATCH', '/api/admin/orders/' + encodeURIComponent(id), { status: status }).then(function (d) {
       const i = S.orders.findIndex(function (o) { return o.id === id; });
       if (i >= 0) S.orders[i] = d.order;
-      S.countries = d.countries || S.countries; renderAll();
+      applySnap(d); renderAll();
       if (S.open === id) openDetail(id);
     });
   }
@@ -253,6 +263,7 @@
       '<div class="d__item"><small>' + t('a.d.phone') + '</small>' + esc(o.customer.phone) + '</div>' +
       '<div class="d__item"><small>' + t('a.col.country') + '</small>' + flag(o.shipping.country) + ' ' + esc(cname(o.shipping.country, o)) + ' · ' + esc(o.shipping.city) + '</div>' +
       '<div class="d__item"><small>' + t('a.d.email') + '</small>' + (esc(o.customer.email) || '—') + '</div>' +
+      (o.color ? '<div class="d__item"><small>' + t('f.color') + '</small>' + esc(o.color) + '</div>' : '') +
       '<div class="d__item d__item--full"><small>' + t('a.d.address') + '</small>' + esc(o.shipping.address) + '</div>' +
       (o.note ? '<div class="d__item d__item--full"><small>' + t('a.d.note') + '</small>' + esc(o.note) + '</div>' : '') +
       '</div><div class="d__lines">' + lines + '</div>' +
@@ -279,7 +290,7 @@
     }
     if (e.target.id === 'delOrder' && confirm(t('a.d.confirmDelete'))) {
       api('DELETE', '/api/admin/orders/' + encodeURIComponent(S.open)).then(function (d) {
-        S.orders = S.orders.filter(function (o) { return o.id !== S.open; }); S.countries = d.countries || S.countries;
+        S.orders = S.orders.filter(function (o) { return o.id !== S.open; }); applySnap(d);
         dlg.close(); renderAll();
       }).catch(function () {});
     }
@@ -298,7 +309,7 @@
     $('#countriesTable tbody').innerHTML = S.countries.length ? S.countries.map(function (c) {
       return '<tr data-code="' + esc(c.code) + '"><td>' + flag(c.code) + ' <b>' + esc(c[i18n.get()]) + '</b><small>' + esc(c.code) + ' · +' + esc(c.dial) + ' · ' + esc(t('a.region.' + c.region)) + '</small></td>' +
         '<td><a href="/' + esc(c.slug) + '" target="_blank" rel="noopener">/' + esc(c.slug) + '</a></td>' +
-        '<td>' + esc(c.currency) + '</td><td class="num">' + c.products.length + '</td><td class="num">' + orderCount(c.code) + '</td>' +
+        '<td>' + esc(c.currency) + '</td><td class="num">' + productsOf(c.code).length + '</td><td class="num">' + orderCount(c.code) + '</td>' +
         '<td><label class="switch"><input type="checkbox" data-toggle="' + esc(c.code) + '"' + (c.active ? ' checked' : '') + '><span>' + (c.active ? t('a.cty.on') : t('a.cty.off')) + '</span></label></td>' +
         '<td class="num"><button class="btn btn--sm" type="button" data-edit="' + esc(c.code) + '">' + t('a.cty.edit') + '</button></td></tr>';
     }).join('') : '<tr><td colspan="7" class="empty">' + t('a.cty.empty') + '</td></tr>';
@@ -310,7 +321,7 @@
   $('#countriesTable').addEventListener('change', function (e) {
     const cb = e.target.closest('[data-toggle]'); if (!cb) return;
     api('PUT', '/api/admin/countries/' + encodeURIComponent(cb.dataset.toggle), { active: cb.checked }).then(function (d) {
-      S.countries = d.countries; renderAll(); toast(t('a.cty.saved'));
+      applySnap(d); renderAll(); toast(t('a.cty.saved'));
     }).catch(function () { load().catch(function () {}); });
   });
 
@@ -343,34 +354,13 @@
       '<label class="fld fld--check"><input type="checkbox" name="active"' + (!c || c.active ? ' checked' : '') + '><span>' + t('a.cty.active') + '</span></label>';
     h += '</form><div class="d__actions"><button class="btn btn--primary" type="button" data-act="saveCountry">' + t('a.cty.save') + '</button>' +
       (c ? '<button class="btn btn--danger" type="button" data-act="delCountry">' + t('a.cty.delete') + '</button>' : '') + '</div>';
-    if (c) h += catalogHTML(c);
     h += '</div>';
     $('#cdlgBody').innerHTML = h;
     const dlg = $('#cdlg'); if (!dlg.open) dlg.showModal();
   }
 
-  function catalogHTML(c) {
-    let h = '<div class="catalog"><div class="panel__head"><h3>' + t('a.prod.title') + '</h3>' +
-      '<button class="btn btn--sm" type="button" data-act="addProduct">' + t('a.prod.add') + '</button></div>' +
-      '<p class="muted small">' + t('a.prod.hint', { cur: esc(c.currency) }) + '</p>';
-    h += c.products.map(function (p) {
-      const f = function (label, key, val, step) {
-        return '<label class="fld"><span>' + label + '</span><input data-f="' + key + '" type="number" min="0" step="' + step + '" value="' + esc(val) + '"></label>';
-      };
-      return '<div class="prow" data-pid="' + esc(p.id) + '">' +
-        '<label class="fld fld--full"><span>' + t('a.prod.name') + '</span><input data-f="name" maxlength="80" value="' + esc(p.name) + '"></label>' +
-        f(t('a.prod.price'), 'price', p.price, 'any') + f(t('a.prod.compare'), 'compare', p.compare, 'any') +
-        f(t('a.prod.shipping'), 'shipping', p.shipping, 'any') + f(t('a.prod.free'), 'freeShippingQty', p.freeShippingQty, '1') +
-        f(t('a.prod.stock'), 'stock', p.stock, '1') +
-        '<label class="fld fld--check"><input type="checkbox" data-f="active"' + (p.active ? ' checked' : '') + '><span>' + t('a.prod.active') + '</span></label>' +
-        '<div class="prow__act"><button class="btn btn--primary btn--sm" type="button" data-act="saveProduct">' + t('a.prod.save') + '</button>' +
-        '<button class="btn btn--danger btn--sm" type="button" data-act="delProduct">' + t('a.prod.delete') + '</button></div></div>';
-    }).join('');
-    return h + '</div>';
-  }
-
   function markBad(root, fields) {
-    $$('#cdlg .bad').forEach(function (el) { el.classList.remove('bad'); });
+    $$('dialog .bad').forEach(function (el) { el.classList.remove('bad'); });
     Object.keys(fields || {}).forEach(function (k) {
       const el = root.querySelector('[name="' + k + '"],[data-f="' + k + '"]'); if (el) el.classList.add('bad');
     });
@@ -383,14 +373,6 @@
     const f = $('#cform').elements;
     return { code: f.code.value, slug: f.slug.value, en: f.en.value, fr: f.fr.value, currency: f.currency.value, dial: f.dial.value, region: f.region.value, active: f.active.checked };
   }
-  function readProductRow(row) {
-    const o = {};
-    $$('#cdlg [data-pid="' + row.dataset.pid + '"] [data-f]').forEach(function (el) {
-      o[el.dataset.f] = el.type === 'checkbox' ? el.checked : el.value;
-    });
-    return o;
-  }
-
   $('#cdlg').addEventListener('change', function (e) {
     if (e.target.id !== 'preset') return;
     const p = GS.country(e.target.value), f = $('#cform').elements;
@@ -410,32 +392,182 @@
         ? api('PUT', '/api/admin/countries/' + encodeURIComponent(S.editing), body)
         : api('POST', '/api/admin/countries', body);
       req.then(function (d) {
-        S.countries = d.countries; renderAll(); toast(t('a.cty.saved')); openCountry(d.country.code);
+        applySnap(d); renderAll(); toast(t('a.cty.saved')); openCountry(d.country.code);
       }).catch(function (x) { if (x.fields) { markBad(root, x.fields); failToast(x); } });
     }
     if (act === 'delCountry' && confirm(t('a.cty.confirmDelete'))) {
       api('DELETE', '/api/admin/countries/' + encodeURIComponent(S.editing)).then(function (d) {
-        S.countries = d.countries; dlg.close(); renderAll();
-      }).catch(function () {});
-    }
-    if (act === 'addProduct') {
-      api('POST', '/api/admin/countries/' + encodeURIComponent(S.editing) + '/products', {}).then(function (d) {
-        S.countries = d.countries; renderAll(); openCountry(S.editing);
-      }).catch(function () {});
-    }
-    const row = b.closest('.prow');
-    if (act === 'saveProduct' && row) {
-      api('PUT', '/api/admin/countries/' + encodeURIComponent(S.editing) + '/products/' + encodeURIComponent(row.dataset.pid), readProductRow(row)).then(function (d) {
-        S.countries = d.countries; renderAll(); toast(t('a.prod.saved'));
-      }).catch(function (x) { if (x.fields) { markBad(row, x.fields); failToast(x); } });
-    }
-    if (act === 'delProduct' && row && confirm(t('a.prod.confirmDelete'))) {
-      api('DELETE', '/api/admin/countries/' + encodeURIComponent(S.editing) + '/products/' + encodeURIComponent(row.dataset.pid)).then(function (d) {
-        S.countries = d.countries; renderAll(); openCountry(S.editing);
+        applySnap(d); dlg.close(); renderAll();
       }).catch(function () {});
     }
   });
   $('#cdlg').addEventListener('close', function () { S.editing = null; });
+
+  /* ---------- shared helpers for categories / products ---------- */
+  function countryOptions(selected, placeholder) {
+    return '<option value="">' + esc(placeholder) + '</option>' + S.countries.map(function (c) {
+      return '<option value="' + esc(c.code) + '"' + (c.code === selected ? ' selected' : '') + '>' + esc((c.flag || flag(c.code)) + ' ' + c[i18n.get()]) + '</option>';
+    }).join('');
+  }
+  function hint(msg) { return '<p class="hintbox">' + esc(msg) + '</p>'; }
+  function catName(id) { const c = S.categories.find(function (x) { return x.id === id; }); return c ? c[i18n.get()] : '—'; }
+  function skip(el, force) { return !force && el.contains(document.activeElement) && document.activeElement !== document.body; }
+
+  /* ---------- categories (independent list per country) ---------- */
+  function renderCategories(force) {
+    const body = $('#catBody'); if (skip(body, force)) return;
+    if (S.catCountry && !findCountry(S.catCountry)) S.catCountry = '';
+    $('#catCountry').innerHTML = countryOptions(S.catCountry, t('a.pick.ph'));
+    if (!S.catCountry) { body.innerHTML = hint(t('a.pick.first')); return; }
+    const cats = categoriesOf(S.catCountry);
+    const inUse = function (id) { return S.products.filter(function (p) { return p.categoryId === id; }).length; };
+    body.innerHTML =
+      '<div class="crow crow--add"><span>＋</span><input data-n="en" maxlength="60" placeholder="' + esc(t('a.cat.en')) + '"><input data-n="fr" maxlength="60" placeholder="' + esc(t('a.cat.fr')) + '"><span></span>' +
+      '<div class="crow__act"><button class="btn btn--primary btn--sm" type="button" data-act="addCat">' + t('a.cat.add') + '</button></div></div>' +
+      (cats.length ? cats.map(function (c, i) {
+        return '<div class="crow" data-cid="' + esc(c.id) + '"><span class="muted small">' + (i + 1) + '</span>' +
+          '<input data-f="en" maxlength="60" value="' + esc(c.en) + '"><input data-f="fr" maxlength="60" value="' + esc(c.fr) + '">' +
+          '<label class="switch"><input type="checkbox" data-f="active"' + (c.active ? ' checked' : '') + '><span>' + t('a.cty.on') + '</span></label>' +
+          '<div class="crow__act"><span class="muted small">' + t('a.cat.count', { n: inUse(c.id) }) + '</span>' +
+          '<button class="btn btn--sm" type="button" data-act="upCat"' + (i === 0 ? ' disabled' : '') + ' aria-label="up">↑</button>' +
+          '<button class="btn btn--sm" type="button" data-act="downCat"' + (i === cats.length - 1 ? ' disabled' : '') + ' aria-label="down">↓</button>' +
+          '<button class="btn btn--primary btn--sm" type="button" data-act="saveCat">' + t('a.cat.save') + '</button>' +
+          '<button class="btn btn--danger btn--sm" type="button" data-act="delCat">' + t('a.cat.delete') + '</button></div></div>';
+      }).join('') : hint(t('a.cat.empty')));
+  }
+  $('#catCountry').addEventListener('change', function (e) { S.catCountry = e.target.value; renderCategories(true); });
+  $('#catBody').addEventListener('click', function (e) {
+    const b = e.target.closest('[data-act]'); if (!b) return;
+    const act = b.dataset.act, row = b.closest('[data-cid]');
+    const done = function (d) { applySnap(d); renderAll(); renderCategories(true); };
+    if (act === 'addCat') {
+      const box = b.closest('.crow');
+      api('POST', '/api/admin/categories', { countryCode: S.catCountry, en: box.querySelector('[data-n=en]').value, fr: box.querySelector('[data-n=fr]').value })
+        .then(function (d) { done(d); toast(t('a.cat.saved')); })
+        .catch(function (x) { if (x.fields) { box.querySelectorAll('input').forEach(function (i) { i.classList.toggle('bad', !i.value.trim()); }); toast(t('a.cty.err')); } });
+      return;
+    }
+    if (!row) return;
+    const id = row.dataset.cid;
+    if (act === 'saveCat') {
+      api('PUT', '/api/admin/categories/' + encodeURIComponent(id), { en: row.querySelector('[data-f=en]').value, fr: row.querySelector('[data-f=fr]').value, active: row.querySelector('[data-f=active]').checked })
+        .then(function (d) { done(d); toast(t('a.cat.saved')); })
+        .catch(function (x) { if (x.fields) { toast(t('a.cty.err')); } });
+    }
+    if (act === 'delCat' && confirm(t('a.cat.confirmDelete'))) {
+      api('DELETE', '/api/admin/categories/' + encodeURIComponent(id)).then(done)
+        .catch(function (x) { if (x.status === 409) toast(t('a.cat.inuse')); });
+    }
+    if (act === 'upCat' || act === 'downCat') {
+      const ids = categoriesOf(S.catCountry).map(function (c) { return c.id; });
+      const i = ids.indexOf(id), j = act === 'upCat' ? i - 1 : i + 1;
+      if (i < 0 || j < 0 || j >= ids.length) return;
+      ids[i] = ids[j]; ids[j] = id;
+      api('POST', '/api/admin/categories/reorder', { countryCode: S.catCountry, ids: ids }).then(done).catch(function () {});
+    }
+  });
+
+  /* ---------- products (country first, then that country's categories) ---------- */
+  function renderProducts(force) {
+    const body = $('#prodBody'); if (skip(body, force)) return;
+    if (S.prodCountry && !findCountry(S.prodCountry)) S.prodCountry = '';
+    $('#prodCountry').innerHTML = countryOptions(S.prodCountry, t('a.pick.ph'));
+    $('#addProduct').disabled = !S.prodCountry;
+    if (!S.prodCountry) { body.innerHTML = hint(t('a.pick.first')); return; }
+    const c = findCountry(S.prodCountry), list = productsOf(S.prodCountry);
+    body.innerHTML = list.length ? '<div class="tablewrap"><table class="table"><thead><tr><th>' + t('a.prod.name') + '</th><th>' + t('a.prod.category') + '</th><th class="num">' +
+      t('a.prod.price') + ' (' + esc(c.currency) + ')</th><th class="num">' + t('a.prod.stock') + '</th><th>' + t('a.cty.status') + '</th><th></th></tr></thead><tbody>' +
+      list.map(function (p) {
+        return '<tr><td><b>' + esc(p.name) + '</b><small>/' + esc(c.slug) + '/' + esc(p.id) + (p.colorOptions ? ' · ' + t('f.color') : '') + '</small></td>' +
+          '<td>' + esc(catName(p.categoryId)) + '</td><td class="num">' + loc(p.price, c.currency) + '</td><td class="num">' + p.stock + '</td>' +
+          '<td><label class="switch"><input type="checkbox" data-ptoggle="' + esc(p.id) + '"' + (p.active ? ' checked' : '') + '><span>' + (p.active ? t('a.cty.on') : t('a.cty.off')) + '</span></label></td>' +
+          '<td class="num"><button class="btn btn--sm" type="button" data-pedit="' + esc(p.id) + '">' + t('a.cty.edit') + '</button></td></tr>';
+      }).join('') + '</tbody></table></div>' : hint(t('a.prod.empty'));
+  }
+  $('#prodCountry').addEventListener('change', function (e) { S.prodCountry = e.target.value; renderProducts(true); });
+  $('#addProduct').addEventListener('click', function () { if (S.prodCountry) openProduct({ code: S.prodCountry, id: null }); });
+  $('#prodBody').addEventListener('click', function (e) {
+    const b = e.target.closest('[data-pedit]'); if (b) openProduct({ code: S.prodCountry, id: b.dataset.pedit });
+  });
+  $('#prodBody').addEventListener('change', function (e) {
+    const cb = e.target.closest('[data-ptoggle]'); if (!cb) return;
+    api('PUT', '/api/admin/products/' + encodeURIComponent(S.prodCountry) + '/' + encodeURIComponent(cb.dataset.ptoggle), { active: cb.checked })
+      .then(function (d) { applySnap(d); renderAll(); renderProducts(true); toast(t('a.prod.saved')); })
+      .catch(function () { load().catch(function () {}); });
+  });
+
+  function categoryOptions(code, selected) {
+    const cats = categoriesOf(code);
+    return '<option value="">' + esc(cats.length ? t('a.prod.category.ph') : t('a.prod.category.none')) + '</option>' + cats.map(function (c) {
+      return '<option value="' + esc(c.id) + '"' + (c.id === selected ? ' selected' : '') + '>' + esc(c[i18n.get()]) + (c.active ? '' : ' (' + t('a.cty.off') + ')') + '</option>';
+    }).join('');
+  }
+  function openProduct(ref) {
+    S.editingProduct = ref;
+    const p = ref.id ? S.products.find(function (x) { return x.countryCode === ref.code && x.id === ref.id; }) : null;
+    if (ref.id && !p) return;
+    const c = findCountry(ref.code) || { currency: 'EUR' };
+    const base = p || Object.assign(GS.defaultProduct(c.currency, S.rates), { name: '', rich: false, stock: 0, categoryId: '' });
+    const num = function (label, key, val, step) {
+      return '<label class="fld"><span>' + label + '</span><input name="' + key + '" type="number" min="0" step="' + step + '" value="' + esc(val) + '"></label>';
+    };
+    $('#pdlgBody').innerHTML = '<div class="d"><div class="d__head"><h2>' + (p ? esc(p.name) : t('a.prod.new')) + '</h2>' +
+      '<button class="btn btn--sm" type="button" data-act="close">' + t('a.cty.close') + '</button></div>' +
+      '<form id="pform" class="pform" novalidate>' +
+      '<label class="fld"><span>' + t('a.prod.country') + '</span><select name="countryCode"' + (p ? ' disabled title="' + esc(t('a.prod.locked')) + '"' : '') + '>' + countryOptions(ref.code, t('a.pick.ph')) + '</select></label>' +
+      '<label class="fld"><span>' + t('a.prod.category') + '</span><select name="categoryId">' + categoryOptions(ref.code, base.categoryId) + '</select></label>' +
+      '<label class="fld fld--full"><span>' + t('a.prod.name') + '</span><input name="name" maxlength="80" value="' + esc(base.name) + '"></label>' +
+      '<label class="fld fld--full"><span>' + t('a.prod.image') + '</span><input name="image" maxlength="500" placeholder="https://… / /media/…" value="' + esc(base.image) + '"></label>' +
+      '<label class="fld fld--full"><span>' + t('a.prod.desc') + '</span><textarea name="description" maxlength="2000">' + esc(base.description) + '</textarea></label>' +
+      '<label class="fld fld--check fld--full"><input type="checkbox" name="colorOptions"' + (base.colorOptions ? ' checked' : '') + '><span>' + t('a.prod.colors') + '</span></label>' +
+      num(t('a.prod.price') + ' (<b id="pcur">' + esc(c.currency) + '</b>)', 'price', base.price, 'any') + num(t('a.prod.compare'), 'compare', base.compare, 'any') +
+      num(t('a.prod.shipping'), 'shipping', base.shipping, 'any') + num(t('a.prod.free'), 'freeShippingQty', base.freeShippingQty, '1') +
+      num(t('a.prod.stock'), 'stock', base.stock, '1') +
+      '<label class="fld fld--check"><input type="checkbox" name="active"' + (base.active ? ' checked' : '') + '><span>' + t('a.prod.active') + '</span></label>' +
+      '</form><p class="muted small">' + t('a.prod.hint', { cur: esc(c.currency) }) + '</p>' +
+      '<div class="d__actions"><button class="btn btn--primary" type="button" data-act="saveProduct">' + t('a.prod.save') + '</button>' +
+      (p ? '<button class="btn btn--danger" type="button" data-act="delProduct">' + t('a.prod.delete') + '</button>' : '') + '</div></div>';
+    const dlg = $('#pdlg'); if (!dlg.open) dlg.showModal();
+  }
+  $('#pdlg').addEventListener('change', function (e) {
+    if (e.target.name !== 'countryCode') return;
+    // choosing the country loads that country's own categories and currency
+    const code = e.target.value, f = $('#pform').elements, c = findCountry(code);
+    f.categoryId.innerHTML = categoryOptions(code, '');
+    $('#pcur').textContent = c ? c.currency : '';
+    if (c && S.editingProduct && !S.editingProduct.id) {
+      const d = GS.defaultProduct(c.currency, S.rates);
+      f.price.value = d.price; f.compare.value = d.compare; f.shipping.value = d.shipping;
+    }
+  });
+  $('#pdlg').addEventListener('click', function (e) {
+    const dlg = $('#pdlg');
+    if (e.target === dlg) { dlg.close(); return; }
+    const b = e.target.closest('[data-act]'); if (!b) return;
+    const ref = S.editingProduct, f = $('#pform') && $('#pform').elements;
+    if (b.dataset.act === 'close') { dlg.close(); return; }
+    if (b.dataset.act === 'saveProduct') {
+      const body = {
+        categoryId: f.categoryId.value, name: f.name.value, image: f.image.value, description: f.description.value, colorOptions: f.colorOptions.checked,
+        price: f.price.value, compare: f.compare.value, shipping: f.shipping.value, freeShippingQty: f.freeShippingQty.value, stock: f.stock.value, active: f.active.checked
+      };
+      if (!ref.id) body.countryCode = f.countryCode.value;
+      const req = ref.id
+        ? api('PUT', '/api/admin/products/' + encodeURIComponent(ref.code) + '/' + encodeURIComponent(ref.id), body)
+        : api('POST', '/api/admin/products', body);
+      req.then(function (d) {
+        applySnap(d);
+        if (!ref.id) S.prodCountry = d.product.countryCode;
+        dlg.close(); renderAll(); renderProducts(true); toast(t('a.prod.saved'));
+      }).catch(function (x) { if (x.fields) { markBad(dlg, x.fields); failToast(x); } });
+    }
+    if (b.dataset.act === 'delProduct' && confirm(t('a.prod.confirmDelete'))) {
+      api('DELETE', '/api/admin/products/' + encodeURIComponent(ref.code) + '/' + encodeURIComponent(ref.id)).then(function (d) {
+        applySnap(d); dlg.close(); renderAll(); renderProducts(true);
+      }).catch(function () {});
+    }
+  });
+  $('#pdlg').addEventListener('close', function () { S.editingProduct = null; });
 
   /* ---------- CSV export ---------- */
   function cell(v) {
@@ -444,10 +576,10 @@
     return '"' + s.replace(/"/g, '""') + '"';
   }
   $('#export').addEventListener('click', function () {
-    const head = ['id', 'date', 'status', 'name', 'phone', 'email', 'region', 'country', 'city', 'address', 'product', 'qty', 'extras', 'currency', 'total_local', 'total_eur', 'note'];
+    const head = ['id', 'date', 'status', 'name', 'phone', 'email', 'region', 'country', 'city', 'address', 'product', 'color', 'qty', 'extras', 'currency', 'total_local', 'total_eur', 'note'];
     const rows = filtered().map(function (o) {
       return [o.id, o.createdAt, o.status, o.customer.name, o.customer.phone, o.customer.email, o.shipping.region, o.shipping.country,
-        o.shipping.city, o.shipping.address, o.productName || '', o.qty, o.cross.join('+'), o.currency, o.amounts.total, o.totalEUR, o.note].map(cell).join(',');
+        o.shipping.city, o.shipping.address, o.productName || '', o.color || '', o.qty, o.cross.join('+'), o.currency, o.amounts.total, o.totalEUR, o.note].map(cell).join(',');
     });
     const blob = new Blob(['﻿' + [head.join(',')].concat(rows).join('\r\n')], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
@@ -457,7 +589,7 @@
 
   /* ---------- boot ---------- */
   function renderAll() {
-    fillFilters(); renderKpis(); renderChart(); renderRegions(); renderCountryTable(); renderSettings(); renderOrders(); renderCountriesPane();
+    fillFilters(); renderKpis(); renderChart(); renderRegions(); renderCountryTable(); renderSettings(); renderOrders(); renderCountriesPane(); renderCategories(); renderProducts();
   }
   function paintLang() {
     i18n.apply(); filterSig = '';
@@ -466,6 +598,7 @@
       renderAll();
       if (S.open) openDetail(S.open);
       if (S.editing) openCountry(S.editing);
+      if (S.editingProduct) openProduct(S.editingProduct);
     }
   }
   $$('[data-lang]').forEach(function (b) { b.addEventListener('click', function () { i18n.set(b.dataset.lang); }); });
@@ -475,6 +608,6 @@
   showTab(S.tab);
   if (S.token) { showApp(true); load().catch(function () { /* logout handled in api() */ }); }
   setInterval(function () {
-    if (S.token && !$('#app').hidden && !$('#detail').open && !$('#cdlg').open) load().catch(function () {});
+    if (S.token && !$('#app').hidden && !$('#detail').open && !$('#cdlg').open && !$('#pdlg').open) load().catch(function () {});
   }, 30000);
 })();

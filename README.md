@@ -7,8 +7,10 @@ node server.js            # or: npm start
 ```
 
 - Home (country picker): http://localhost:3000
-- One page per country: `/ma`, `/ci`, `/ga`, `/ml`, `/bf`, `/sn` (the URL slug is editable in the admin)
-- Admin: http://localhost:3000/admin — tabs: Dashboard, Orders (grouped by country), Countries & products
+- One page per country with its own categories and products: `/kenya`, `/spain`, `/ma`… (the URL slug is editable in the admin)
+- Product page: `/<country>/<product>` (title and primary image first, then the description; a color text field only appears on products with color options)
+- Admin: http://localhost:3000/admin — tabs: Dashboard, Orders (grouped by country), Countries, Categories (pick a country first), Products (pick a country first, then one of its categories)
+- On every start, any missing target country (Kenya … Romania) is inserted; existing countries, categories, products and orders are never overwritten.
 
 **Admin password:** set `ADMIN_PASSWORD` (and optionally `PORT`) as environment variables. If not set, a random password is generated on first run and saved in `DATA_DIR/admin-password.txt`.
 

@@ -17,7 +17,17 @@ files.forEach(function (f) {
 const GS = require(path.join(root, 'public', 'shared.js'));
 const q = GS.quote({ qty: 2, currency: 'MAD', rates: {}, product: GS.defaultProduct('MAD', {}) });
 if (!(q.total > 0) || q.currency !== 'MAD') { failed = true; console.error('FAIL shared.js quote'); } else console.log('ok   quote(MAD) = ' + q.total);
-['MA', 'CI', 'GA', 'ML', 'BF', 'SN'].forEach(function (c) {
-  if (!GS.country(c)) { failed = true; console.error('FAIL missing country ' + c); }
+// [code, currency, dial] for every target country
+const TARGETS = [
+  ['MA', 'MAD', '212'], ['CI', 'XOF', '225'], ['GA', 'XAF', '241'], ['ML', 'XOF', '223'], ['BF', 'XOF', '226'], ['SN', 'XOF', '221'],
+  ['KE', 'KES', '254'], ['TZ', 'TZS', '255'], ['ZM', 'ZMW', '260'], ['GH', 'GHS', '233'], ['UG', 'UGX', '256'], ['SS', 'SSP', '211'],
+  ['SK', 'EUR', '421'], ['SI', 'EUR', '386'], ['ES', 'EUR', '34'], ['AT', 'EUR', '43'], ['BG', 'BGN', '359'], ['HR', 'EUR', '385'],
+  ['CZ', 'CZK', '420'], ['FR', 'EUR', '33'], ['DE', 'EUR', '49'], ['GR', 'EUR', '30'], ['HU', 'HUF', '36'], ['IT', 'EUR', '39'],
+  ['MK', 'MKD', '389'], ['PL', 'PLN', '48'], ['PT', 'EUR', '351'], ['RO', 'RON', '40']
+];
+TARGETS.forEach(function (t) {
+  const c = GS.country(t[0]);
+  if (!c || c.currency !== t[1] || c.dial !== t[2] || !GS.CURRENCIES[t[1]]) { failed = true; console.error('FAIL country ' + t[0]); }
 });
+console.log('ok   ' + TARGETS.length + ' target countries (currency + dial code)');
 process.exit(failed ? 1 : 0);

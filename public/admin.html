@@ -34,6 +34,8 @@
       <button type="button" class="tab is-active" role="tab" data-tab="dashboard" data-i18n="a.tab.dashboard"></button>
       <button type="button" class="tab" role="tab" data-tab="orders" data-i18n="a.tab.orders"></button>
       <button type="button" class="tab" role="tab" data-tab="countries" data-i18n="a.tab.countries"></button>
+      <button type="button" class="tab" role="tab" data-tab="categories" data-i18n="a.tab.categories"></button>
+      <button type="button" class="tab" role="tab" data-tab="products" data-i18n="a.tab.products"></button>
     </nav>
     <div class="top__tools">
       <div class="seg">
@@ -123,6 +125,27 @@
         </div>
       </section>
     </div>
+
+    <!-- Categories: an independent list per country -->
+    <div class="pane" data-pane="categories" hidden>
+      <section class="panel">
+        <div class="panel__head"><h2 data-i18n="a.cat.title"></h2></div>
+        <label class="lbl lbl--inline"><span data-i18n="a.pick.country"></span><select id="catCountry"></select></label>
+        <div id="catBody"></div>
+      </section>
+    </div>
+
+    <!-- Products: country first, then that country's categories -->
+    <div class="pane" data-pane="products" hidden>
+      <section class="panel">
+        <div class="panel__head">
+          <h2 data-i18n="a.prod.list"></h2>
+          <button class="btn btn--primary" id="addProduct" type="button" data-i18n="a.prod.add" disabled></button>
+        </div>
+        <label class="lbl lbl--inline"><span data-i18n="a.pick.country"></span><select id="prodCountry"></select></label>
+        <div id="prodBody"></div>
+      </section>
+    </div>
   </div>
 </div>
 
@@ -131,9 +154,14 @@
   <div id="detailBody"></div>
 </dialog>
 
-<!-- COUNTRY + CATALOG EDITOR -->
+<!-- COUNTRY EDITOR -->
 <dialog id="cdlg" class="detail detail--wide">
   <div id="cdlgBody"></div>
+</dialog>
+
+<!-- PRODUCT EDITOR -->
+<dialog id="pdlg" class="detail detail--wide">
+  <div id="pdlgBody"></div>
 </dialog>
 
 <div class="toast" id="toast" hidden></div>
