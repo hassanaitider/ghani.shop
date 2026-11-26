@@ -301,12 +301,12 @@
       const stock = !b.label && p && p.rich && b.qty === i + 1 && i < 3;
       const title = b.label || (stock ? t('bundle.' + (i + 1) + '.t') : (b.qty === 1 ? t('bundle.generic.1') : t('bundle.generic.n', { n: b.qty })));
       const desc = stock ? t('bundle.' + (i + 1) + '.d')
-        : (b.off ? '−' + b.off + '%' + (q.shipping === 0 && b.qty > 1 ? ' + ' + t('bundle.free') : '') : '');
+        : (b.off ? '−' + Math.round(b.off) + '%' + (q.shipping === 0 && b.qty > 1 ? ' + ' + t('bundle.free') : '') : '');
       return '<button type="button" class="bundle' + (active ? ' is-active' : '') + '" data-qty="' + b.qty + '">' +
         (stock && b.qty === 2 ? '<span class="bundle__pop">' + t('bundle.pop') + '</span>' : '') +
         '<b>' + esc(title) + '</b><small>' + esc(desc) + '</small>' +
         '<span class="bundle__p">' + fmt(q.subtotal - q.discount) + '</span>' +
-        (b.qty > 1 ? '<span class="muted small">' + fmt((q.subtotal - q.discount) / b.qty) + ' ' + t('bundle.each') + '</span>' : '') +
+        (b.qty > 1 && !b.label ? '<span class="muted small">' + fmt((q.subtotal - q.discount) / b.qty) + ' ' + t('bundle.each') + '</span>' : '') +
         '</button>';
     }).join('');
   }
@@ -323,6 +323,7 @@
     h += row(t('sum.shipping'), q.shipping ? fmt(q.shipping) : t('sum.free'), q.shipping ? '' : 'green');
     h += '<div class="sum__total"><span>' + t('sum.total') + '</span><b>' + fmt(q.total) + '</b></div>';
     $('#summary').innerHTML = h;
+    $('.qty').hidden = isPlain() && (state.product.bundles || []).length > 0; // the offers replace the +/- stepper
     $('#qtyVal').textContent = state.qty;
     $('#qtyMinus').disabled = state.qty <= 1;
     $('#qtyPlus').disabled = state.qty >= Math.min(GS.PRODUCT.maxQty, Math.max(1, stockLeft()));

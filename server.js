@@ -64,6 +64,15 @@ const SOLARGLOW_COUNTRIES = ['CI', 'SN', 'GN'];
 // "Pack de 2 sacs PVC" landing page: all sub-Saharan francophone African countries. 19999 CFA = the reference price.
 const SACS_COUNTRIES = ['CI', 'SN', 'GN', 'CM', 'CF', 'TD', 'GA', 'CG', 'GQ', 'CD', 'ML', 'BF'];
 const SACS_PRICE_CFA = 19999;
+// 3 offers (qty = number of packs of 2): 2 bags 19999, 4 bags 35999, 6 bags 47999 CFA, expressed as exact percentages off the unit price
+function SACS_BUNDLES() {
+  const offer = function (qty, total) { return Math.round((1 - total / (SACS_PRICE_CFA * qty)) * 1e6) / 1e4; };
+  return [
+    { qty: 1, off: 0, label: '2 sacs' },
+    { qty: 2, off: offer(2, 35999), label: '4 sacs' },
+    { qty: 3, off: offer(3, 47999), label: '6 sacs' }
+  ];
+}
 // the 3 photos, in this order, stacked on the product page
 function SACS_LANDING() {
   return ['pack-de-2', 'organisation', 'capacite'].map(function (f) {
@@ -171,6 +180,11 @@ function startupSync() {
     if (p.id === 'sacs-pvc' && p.image === '/media/sacs-pvc/pack-de-2.webp' && (p.landing || []).length === 2) { p.image = ''; p.landing = SACS_LANDING(); }
   });
 
+  // stores that already have the product: add the 3 offers and a stock of 50 (once)
+  db.products.forEach(function (p) {
+    if (p.id === 'sacs-pvc' && !p.offersV1) { p.offersV1 = true; p.bundles = SACS_BUNDLES(); p.stock = 50; }
+  });
+
   // seed the "Pack de 2 sacs PVC" product once per country (never re-created if the admin deletes it)
   SACS_COUNTRIES.forEach(function (code) {
     const c = findCountry(code);
@@ -187,9 +201,9 @@ function startupSync() {
       description: 'Pack of 2 giant (38x24x32 cm) transparent PVC storage bags. Waterproof, rigid and foldable. Cash on delivery.',
       descriptionFr: 'Lot de 2 sacs de rangement géants (38x24x32 cm) en PVC épais, 100% transparents, étanches, rigides et pliables. Paiement à la livraison.',
       image: '', imageFr: '', colorOptions: false, gallery: [], sizesEnabled: false, sizes: ['S', 'M', 'L', 'XL'],
-      bundles: [], crossSellIds: [],
+      bundles: SACS_BUNDLES(), offersV1: true, crossSellIds: [],
       landing: SACS_LANDING(),
-      stock: 500, price: price, compare: 0, shipping: 0, freeShippingQty: 1
+      stock: 50, price: price, compare: 0, shipping: 0, freeShippingQty: 1
     });
     added.push(code + ':sacs-pvc');
   });
@@ -644,7 +658,7 @@ function readProduct(b, existing, countryCode) {
       const qty = num(x && x.qty, 1, 10), off = num(x && x.off, 0, 90);
       if (qty === null || off === null || seen[Math.floor(qty)]) { errors.bundles = 1; return; }
       seen[Math.floor(qty)] = 1;
-      list.push({ qty: Math.floor(qty), off: Math.round(off), label: clean(x.label, 30) });
+      list.push({ qty: Math.floor(qty), off: Math.round(off * 1e4) / 1e4, label: clean(x.label, 30) });
     });
     out.bundles = list.sort(function (p, q) { return p.qty - q.qty; });
   }

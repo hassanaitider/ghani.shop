@@ -600,7 +600,7 @@
     $('#mBundles').innerHTML = draft.bundles.map(function (b, i) {
       return '<div class="brow" data-brow="' + i + '">' +
         '<label class="fld"><span>' + t('a.m.bundles.qty') + '</span><input type="number" min="1" max="10" step="1" data-b="qty" value="' + esc(b.qty) + '"></label>' +
-        '<label class="fld"><span>' + t('a.m.bundles.off') + '</span><input type="number" min="0" max="90" step="1" data-b="off" value="' + esc(b.off) + '"></label>' +
+        '<label class="fld"><span>' + t('a.m.bundles.off') + '</span><input type="number" min="0" max="90" step="any" data-b="off" value="' + esc(b.off) + '"></label>' +
         '<label class="fld"><span>' + t('a.m.bundles.label') + '</span><input maxlength="30" data-b="label" value="' + esc(b.label) + '"></label>' +
         '<button type="button" class="btn btn--sm btn--danger" data-act="rmBundle" data-i="' + i + '">×</button></div>';
     }).join('') + (draft.bundles.length < 6 ? '<button type="button" class="btn btn--sm" data-act="addBundle">' + t('a.m.bundles.add') + '</button>' : '');

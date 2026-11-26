@@ -155,7 +155,9 @@
     const compareUnit = p ? Number(p.compare) : conv(PRODUCT.compareEUR, cur, rates);
     const subtotal = unit * qty;
     const off = p ? bundleOff(p.bundles, qty) : discountFor(qty); // a product's own quantity offers
-    const discount = round(subtotal * off, cur);
+    // whole-percent offers are rounded to the currency step; fractional-percent offers encode an exact fixed price, so they only round to the currency's decimals
+    const exactOffer = Math.abs(off * 100 - Math.round(off * 100)) > 1e-9;
+    const discount = exactOffer ? Number((subtotal * off).toFixed(CURRENCIES[cur].dec)) : round(subtotal * off, cur);
     const crossIds = Array.from(new Set(o.cross || [])).filter(function (id) {
       return CROSS.some(function (c) { return c.id === id; });
     });
