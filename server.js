@@ -60,10 +60,15 @@ const DEFAULT_CATEGORIES = [
 ];
 const STARTER_COUNTRIES = ['CI', 'SN', 'GN']; // slugs come from TARGET_COUNTRIES below
 // The SolarGlow landing page is sold only in these francophone countries
-const SOLARGLOW_COUNTRIES = ['CI', 'SN', 'GN']; // only used to fill a brand-new, empty store
+const SOLARGLOW_COUNTRIES = ['CI', 'SN', 'GN'];
+// "Pack de 2 sacs PVC" landing page: all sub-Saharan francophone African countries. 19999 CFA = the reference price.
+const SACS_COUNTRIES = ['CI', 'SN', 'GN', 'CM', 'CF', 'TD', 'GA', 'CG', 'GQ', 'CD', 'ML', 'BF'];
+const SACS_PRICE_CFA = 19999; // only used to fill a brand-new, empty store
 // Target countries: each one is inserted at startup if it is missing (existing data is never touched). [code, URL slug]
 const TARGET_COUNTRIES = [
   ['CI', 'cote-divoire'], ['SN', 'senegal'], ['GN', 'guinea'],
+  ['CM', 'cameroun'], ['CF', 'centrafrique'], ['TD', 'tchad'], ['GA', 'gabon'], ['CG', 'congo'], ['GQ', 'guinee-equatoriale'],
+  ['CD', 'rd-congo'], ['ML', 'mali'], ['BF', 'burkina-faso'],
   ['KE', 'kenya'], ['TZ', 'tanzania'], ['ZM', 'zambia'], ['GH', 'ghana'], ['UG', 'uganda'], ['SS', 'south-sudan'],
   ['SK', 'slovakia'], ['SI', 'slovenia'], ['ES', 'spain'], ['AT', 'austria'], ['BG', 'bulgaria'], ['HR', 'croatia'],
   ['CZ', 'czech-republic'], ['FR', 'france'], ['DE', 'germany'], ['GR', 'greece'], ['HU', 'hungary'], ['IT', 'italy'],
@@ -154,6 +159,32 @@ function startupSync() {
 
   // upsert the target countries one by one
   TARGET_COUNTRIES.forEach(function (t) { if (addCountry(t[0], t[1])) added.push(t[0]); });
+
+  // seed the "Pack de 2 sacs PVC" product once per country (never re-created if the admin deletes it)
+  SACS_COUNTRIES.forEach(function (code) {
+    const c = findCountry(code);
+    if (!c || c.sacsSeeded) return;
+    c.sacsSeeded = true;
+    if (findProduct(code, 'sacs-pvc')) return;
+    const cur = GS.CURRENCIES[c.currency] || { rate: 655.957, step: 500 };
+    const rate = Number(db.rates && db.rates[c.currency]) || cur.rate;
+    const price = cur.fixed ? SACS_PRICE_CFA : Math.round(SACS_PRICE_CFA / 655.957 * rate / cur.step) * cur.step; // XOF/XAF: exactly 19999
+    const cat = findCategory(code.toLowerCase() + '-home-kitchen') || categoriesOf(code)[0];
+    db.products.push({
+      id: 'sacs-pvc', countryCode: code, categoryId: cat ? cat.id : null, active: true, rich: false,
+      name: 'Pack of 2 clear PVC storage bags', nameFr: 'Pack de 2 sacs de rangement PVC transparents',
+      description: 'Pack of 2 giant (38x24x32 cm) transparent PVC storage bags. Waterproof, rigid and foldable. Cash on delivery.',
+      descriptionFr: 'Lot de 2 sacs de rangement géants (38x24x32 cm) en PVC épais, 100% transparents, étanches, rigides et pliables. Paiement à la livraison.',
+      image: '/media/sacs-pvc/pack-de-2.webp', imageFr: '', colorOptions: false, gallery: [], sizesEnabled: false, sizes: ['S', 'M', 'L', 'XL'],
+      bundles: [], crossSellIds: [],
+      landing: [
+        { title: '', text: '', media: '/media/sacs-pvc/organisation.webp', titleFr: '', textFr: '', mediaFr: '' },
+        { title: '', text: '', media: '/media/sacs-pvc/capacite.webp', titleFr: '', textFr: '', mediaFr: '' }
+      ],
+      stock: 500, price: price, compare: 0, shipping: 0, freeShippingQty: 1
+    });
+    added.push(code + ':sacs-pvc');
+  });
   save();
   if (added.length) console.log('Added countries: ' + added.join(', '));
 }
