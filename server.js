@@ -63,7 +63,13 @@ const STARTER_COUNTRIES = ['CI', 'SN', 'GN']; // slugs come from TARGET_COUNTRIE
 const SOLARGLOW_COUNTRIES = ['CI', 'SN', 'GN'];
 // "Pack de 2 sacs PVC" landing page: all sub-Saharan francophone African countries. 19999 CFA = the reference price.
 const SACS_COUNTRIES = ['CI', 'SN', 'GN', 'CM', 'CF', 'TD', 'GA', 'CG', 'GQ', 'CD', 'ML', 'BF'];
-const SACS_PRICE_CFA = 19999; // only used to fill a brand-new, empty store
+const SACS_PRICE_CFA = 19999;
+// the 3 photos, in this order, stacked on the product page
+function SACS_LANDING() {
+  return ['pack-de-2', 'organisation', 'capacite'].map(function (f) {
+    return { title: '', text: '', media: '/media/sacs-pvc/' + f + '.webp', titleFr: '', textFr: '', mediaFr: '' };
+  });
+} // only used to fill a brand-new, empty store
 // Target countries: each one is inserted at startup if it is missing (existing data is never touched). [code, URL slug]
 const TARGET_COUNTRIES = [
   ['CI', 'cote-divoire'], ['SN', 'senegal'], ['GN', 'guinea'],
@@ -160,6 +166,11 @@ function startupSync() {
   // upsert the target countries one by one
   TARGET_COUNTRIES.forEach(function (t) { if (addCountry(t[0], t[1])) added.push(t[0]); });
 
+  // stores that already got the first layout (hero image + 2 blocks): switch to the 3 photos in order
+  db.products.forEach(function (p) {
+    if (p.id === 'sacs-pvc' && p.image === '/media/sacs-pvc/pack-de-2.webp' && (p.landing || []).length === 2) { p.image = ''; p.landing = SACS_LANDING(); }
+  });
+
   // seed the "Pack de 2 sacs PVC" product once per country (never re-created if the admin deletes it)
   SACS_COUNTRIES.forEach(function (code) {
     const c = findCountry(code);
@@ -175,12 +186,9 @@ function startupSync() {
       name: 'Pack of 2 clear PVC storage bags', nameFr: 'Pack de 2 sacs de rangement PVC transparents',
       description: 'Pack of 2 giant (38x24x32 cm) transparent PVC storage bags. Waterproof, rigid and foldable. Cash on delivery.',
       descriptionFr: 'Lot de 2 sacs de rangement géants (38x24x32 cm) en PVC épais, 100% transparents, étanches, rigides et pliables. Paiement à la livraison.',
-      image: '/media/sacs-pvc/pack-de-2.webp', imageFr: '', colorOptions: false, gallery: [], sizesEnabled: false, sizes: ['S', 'M', 'L', 'XL'],
+      image: '', imageFr: '', colorOptions: false, gallery: [], sizesEnabled: false, sizes: ['S', 'M', 'L', 'XL'],
       bundles: [], crossSellIds: [],
-      landing: [
-        { title: '', text: '', media: '/media/sacs-pvc/organisation.webp', titleFr: '', textFr: '', mediaFr: '' },
-        { title: '', text: '', media: '/media/sacs-pvc/capacite.webp', titleFr: '', textFr: '', mediaFr: '' }
-      ],
+      landing: SACS_LANDING(),
       stock: 500, price: price, compare: 0, shipping: 0, freeShippingQty: 1
     });
     added.push(code + ':sacs-pvc');

@@ -107,6 +107,7 @@
       const sig = JSON.stringify([list, state.mediaIdx, state.product.name]);
       if (sig === gallerySig) return; // keep animated GIFs from restarting on every refresh
       gallerySig = sig;
+      $('.gallery').hidden = !list.length; document.body.classList.toggle('nomedia', !list.length);
       $('#stage').innerHTML = list.length
         ? '<img class="scene scene--img" src="' + esc(list[state.mediaIdx]) + '" alt="' + esc(state.product.name) + '">'
         : '<div class="stage__ph" aria-hidden="true">⚡</div>';
@@ -116,6 +117,7 @@
       return;
     }
     gallerySig = '';
+    $('.gallery').hidden = false; document.body.classList.remove('nomedia');
     $('#stage').innerHTML = sceneHTML(state.scene);
     $('#thumbs').innerHTML = GALLERY.map(function (n, i) {
       return '<button type="button" role="tab" class="thumb' + (n === state.scene ? ' is-active' : '') + '" data-scene="' + n + '" aria-selected="' + (n === state.scene) + '">' +
