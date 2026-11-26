@@ -58,9 +58,12 @@ const DEFAULT_CATEGORIES = [
   ['fashion', 'Fashion', 'Mode'],
   ['gadgets', 'Gadgets', 'Gadgets']
 ];
-const STARTER_COUNTRIES = ['MA', 'CI', 'GA', 'ML', 'BF', 'SN']; // only used to fill a brand-new, empty store
+const STARTER_COUNTRIES = ['CI', 'SN', 'GN']; // slugs come from TARGET_COUNTRIES below
+// The SolarGlow landing page is sold only in these francophone countries
+const SOLARGLOW_COUNTRIES = ['CI', 'SN', 'GN']; // only used to fill a brand-new, empty store
 // Target countries: each one is inserted at startup if it is missing (existing data is never touched). [code, URL slug]
 const TARGET_COUNTRIES = [
+  ['CI', 'cote-divoire'], ['SN', 'senegal'], ['GN', 'guinea'],
   ['KE', 'kenya'], ['TZ', 'tanzania'], ['ZM', 'zambia'], ['GH', 'ghana'], ['UG', 'uganda'], ['SS', 'south-sudan'],
   ['SK', 'slovakia'], ['SI', 'slovenia'], ['ES', 'spain'], ['AT', 'austria'], ['BG', 'bulgaria'], ['HR', 'croatia'],
   ['CZ', 'czech-republic'], ['FR', 'france'], ['DE', 'germany'], ['GR', 'greece'], ['HU', 'hungary'], ['IT', 'italy'],
@@ -101,15 +104,20 @@ function addCountry(code, slug) {
   const c = { code: g.code, slug: uniqueSlug(slug, code), en: g.en, fr: g.fr, flag: flagOf(g.code), region: g.region, currency: g.currency, dial: g.dial, active: true, catSeeded: false };
   db.countries.push(c);
   ensureCategories(c);
-  const p = GS.defaultProduct(c.currency, db.rates);
-  p.countryCode = c.code; p.categoryId = c.code.toLowerCase() + '-gadgets';
-  db.products.push(p);
+  if (SOLARGLOW_COUNTRIES.includes(c.code)) {
+    const p = GS.defaultProduct(c.currency, db.rates);
+    p.countryCode = c.code; p.categoryId = c.code.toLowerCase() + '-gadgets';
+    db.products.push(p);
+  }
   return c;
 }
 
 function startupSync() {
   const added = [];
-  if (!db.countries.length) STARTER_COUNTRIES.forEach(function (code) { if (addCountry(code, code.toLowerCase())) added.push(code); });
+  if (!db.countries.length) STARTER_COUNTRIES.forEach(function (code) {
+    const t = TARGET_COUNTRIES.find(function (x) { return x[0] === code; });
+    if (addCountry(code, t ? t[1] : code.toLowerCase())) added.push(code);
+  });
 
   // older stores kept each country's products inside the country record
   db.countries.forEach(function (c) {
@@ -137,6 +145,11 @@ function startupSync() {
       const fallback = findCategory(p.countryCode.toLowerCase() + '-gadgets') || categoriesOf(p.countryCode)[0];
       p.categoryId = fallback ? fallback.id : null;
     }
+  });
+
+  // SolarGlow is only for CI / SN / GN: hide it once elsewhere (nothing is deleted; the admin can re-enable it)
+  db.products.forEach(function (p) {
+    if (p.id === 'solarglow' && !SOLARGLOW_COUNTRIES.includes(p.countryCode) && !p.hiddenOutsideFr) { p.active = false; p.hiddenOutsideFr = true; }
   });
 
   // upsert the target countries one by one

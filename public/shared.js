@@ -33,6 +33,7 @@
     // XAF and XOF are pegged to the euro by treaty (1 EUR = 655.957), so `fixed` rates ignore admin overrides
     XAF: { sym: 'FCFA', dec: 0, step: 500, rate: 655.957, fixed: true, group: 'central' },
     XOF: { sym: 'FCFA', dec: 0, step: 500, rate: 655.957, fixed: true, group: 'africa' },
+    GNF: { sym: 'FG', dec: 0, step: 1000, rate: 12096, group: 'africa' },
     MAD: { sym: 'MAD', dec: 0, step: 5, rate: 10.8, group: 'africa' },
     TZS: { sym: 'TSh', dec: 0, step: 500, rate: 2900, group: 'africa' },
     ZMW: { sym: 'ZK', dec: 0, step: 5, rate: 29, group: 'africa' },
@@ -67,6 +68,7 @@
     ['ML', 'Mali', 'Mali', 'africa', 'XOF', '223'],
     ['BF', 'Burkina Faso', 'Burkina Faso', 'africa', 'XOF', '226'],
     ['CI', "Côte d'Ivoire", "Côte d'Ivoire", 'africa', 'XOF', '225'],
+    ['GN', 'Guinea', 'Guinée', 'africa', 'GNF', '224'],
     ['NG', 'Nigeria', 'Nigéria', 'africa', 'NGN', '234'],
     ['GH', 'Ghana', 'Ghana', 'africa', 'GHS', '233'],
     ['KE', 'Kenya', 'Kenya', 'africa', 'KES', '254'],
@@ -192,7 +194,7 @@
   }
 
   // Francophone countries: their product pages are shown in French (the French fields of a product, when filled in).
-  const FRANCOPHONE = ['CM', 'CF', 'TD', 'GA', 'CG', 'GQ', 'CD', 'SN', 'MA', 'ML', 'BF', 'CI', 'FR'];
+  const FRANCOPHONE = ['CM', 'CF', 'TD', 'GA', 'CG', 'GQ', 'CD', 'SN', 'MA', 'ML', 'BF', 'CI', 'FR', 'GN'];
   function isFrancophone(code) { return FRANCOPHONE.indexOf(String(code || '').toUpperCase()) >= 0; }
 
   return {
