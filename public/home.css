@@ -42,3 +42,5 @@ h1{font-size:clamp(1.8rem,5vw,2.8rem);letter-spacing:-.03em;margin:.6rem 0}
 .pcard__cat{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
 .pcard__price b{font-size:1.1rem}.pcard__price s{color:var(--muted);font-size:.85rem}
 .pcard__out{color:#991b1b;font-weight:700;font-size:.82rem}
+
+.logo__img{height:56px;width:auto;display:block}

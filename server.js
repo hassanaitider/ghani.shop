@@ -64,6 +64,7 @@ const SOLARGLOW_COUNTRIES = ['CI', 'SN', 'GN'];
 // "Pack de 2 sacs PVC" landing page: all sub-Saharan francophone African countries. 19999 CFA = the reference price.
 const SACS_COUNTRIES = ['CI', 'SN', 'GN', 'CM', 'CF', 'TD', 'GA', 'CG', 'GQ', 'CD', 'ML', 'BF'];
 const SACS_PRICE_CFA = 19999;
+const SACS_COMPARE_CFA = 29999; // "usual price" shown crossed out
 // 3 offers (qty = number of packs of 2): 2 bags 19999, 4 bags 35999, 6 bags 47999 CFA, expressed as exact percentages off the unit price
 function SACS_BUNDLES() {
   const offer = function (qty, total) { return Math.round((1 - total / (SACS_PRICE_CFA * qty)) * 1e6) / 1e4; };
@@ -182,6 +183,12 @@ function startupSync() {
 
   // stores that already have the product: add the 3 offers and a stock of 50 (once)
   db.products.forEach(function (p) {
+    if (p.id === 'sacs-pvc' && !p.compareV1) {
+      p.compareV1 = true;
+      const c = findCountry(p.countryCode), cur = GS.CURRENCIES[c && c.currency] || { rate: 655.957, step: 500 };
+      const rate = Number(db.rates && db.rates[c && c.currency]) || cur.rate;
+      p.compare = cur.fixed ? SACS_COMPARE_CFA : Math.round(SACS_COMPARE_CFA / 655.957 * rate / cur.step) * cur.step;
+    }
     if (p.id === 'sacs-pvc' && !p.offersV1) { p.offersV1 = true; p.bundles = SACS_BUNDLES(); p.stock = 50; }
   });
 
@@ -193,6 +200,7 @@ function startupSync() {
     if (findProduct(code, 'sacs-pvc')) return;
     const cur = GS.CURRENCIES[c.currency] || { rate: 655.957, step: 500 };
     const rate = Number(db.rates && db.rates[c.currency]) || cur.rate;
+    const compareP = cur.fixed ? SACS_COMPARE_CFA : Math.round(SACS_COMPARE_CFA / 655.957 * rate / cur.step) * cur.step;
     const price = cur.fixed ? SACS_PRICE_CFA : Math.round(SACS_PRICE_CFA / 655.957 * rate / cur.step) * cur.step; // XOF/XAF: exactly 19999
     const cat = findCategory(code.toLowerCase() + '-home-kitchen') || categoriesOf(code)[0];
     db.products.push({
@@ -203,7 +211,7 @@ function startupSync() {
       image: '', imageFr: '', colorOptions: false, gallery: [], sizesEnabled: false, sizes: ['S', 'M', 'L', 'XL'],
       bundles: SACS_BUNDLES(), offersV1: true, crossSellIds: [],
       landing: SACS_LANDING(),
-      stock: 50, price: price, compare: 0, shipping: 0, freeShippingQty: 1
+      stock: 50, price: price, compare: compareP, compareV1: true, shipping: 0, freeShippingQty: 1
     });
     added.push(code + ':sacs-pvc');
   });
