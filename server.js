@@ -66,12 +66,30 @@ const SACS_COUNTRIES = ['CI', 'SN', 'GN', 'CM', 'CF', 'TD', 'GA', 'CG', 'GQ', 'C
 const SACS_PRICE_CFA = 19999;
 const SACS_COMPARE_CFA = 29999; // "usual price" shown crossed out
 // 3 offers (qty = number of packs of 2): 2 bags 19999, 4 bags 35999, 6 bags 47999 CFA, expressed as exact percentages off the unit price
-function SACS_BUNDLES() {
+function SACS_BUNDLES(labels) {
+  labels = labels || ['2 sacs', '4 sacs', '6 sacs'];
   const offer = function (qty, total) { return Math.round((1 - total / (SACS_PRICE_CFA * qty)) * 1e6) / 1e4; };
   return [
-    { qty: 1, off: 0, label: '2 sacs' },
-    { qty: 2, off: offer(2, 35999), label: '4 sacs' },
-    { qty: 3, off: offer(3, 47999), label: '6 sacs' }
+    { qty: 1, off: 0, label: labels[0] },
+    { qty: 2, off: offer(2, 35999), label: labels[1] },
+    { qty: 3, off: offer(3, 47999), label: labels[2] }
+  ];
+}
+// English-speaking markets: local price of the pack of 2 (usual price = x1.5, same ratio as 29999 / 19999 CFA)
+const SACS_EN_PRICES = { TZ: 81999, KE: 3999, ZM: 699, UG: 13499, SS: 3999 };
+const SACS_GN_PRICE = 330000;
+// The French infographics carry their text inside the image, so the English page uses the same sections as text blocks.
+function SACS_EN_LANDING() {
+  const b = function (title, text) { return { title: title, text: text, media: '', titleFr: '', textFr: '', mediaFr: '' }; };
+  return [
+    b('PACK OF 2 BAGS: ZERO CLUTTER!', 'Double your storage capacity and protect your belongings from dust. Thanks to the 360° transparent design, find everything at a glance without unpacking a thing.\n\nDUO OFFER: 2 BAGS INCLUDED'),
+    b('Tired of digging through opaque, damaged boxes?', 'Ordinary cardboard boxes get crushed and let in moisture and insects. You waste precious time opening everything just to find your things.\n\nOur set of 2 thick PVC bags transforms your home: stackable, stylish and 100% transparent, they keep your belongings clean and instantly visible.'),
+    b('The Perfect Organization For The Whole Home', "Kids' Room: ideal for storing plush toys and toys without cluttering the floor.\n\nWardrobe & Closets: protect your duvets and off-season clothes from dust.\n\nBathroom: keep your towels clean and completely dry thanks to the waterproof PVC."),
+    b('Ultra-Durable & Waterproof Quality', 'Made from thick waterproof PVC with reinforced seams that keep out water and insects. The double metal zipper gives a wide, smooth opening.'),
+    b('Why Our Pack Dominates The Market', 'Our PVC Bag vs. Fabric / Cardboard Boxes\n\nVisibility: ✔ Ours  ✘ Others\nWaterproofing: ✔ Ours  ✘ Others\nDurability: ✔ Ours  ✘ Others\n\nUnlike fabric boxes that hold dust and sag, our bags keep their rigid shape and wipe clean in seconds with a cloth.'),
+    b('Large Capacity & Optimal Dimensions', 'Giant size (38 x 24 x 32 cm): each bag offers massive volume to store dozens of clothes or toys while sliding easily under a bed.\n\nReinforced rigid structure: the black edges keep the bag upright even when it is completely full.'),
+    b('Designed For Your Daily Comfort', '1. Folds flat: takes up no space when empty.\n\n2. Sturdy handles: carry heavy loads effortlessly.\n\n3. Easy care: wipes clean in a second with a damp cloth.'),
+    b('Order Now – Pay On Delivery!', 'Take advantage of our special offer: a Pack of 2 Bags with a 100% satisfaction guarantee and fast delivery to your door.\n\nPay on delivery · Set of 2 bags · Quality guaranteed · 24/7 customer service')
   ];
 }
 // the 3 photos, in this order, stacked on the product page
@@ -192,6 +210,30 @@ function startupSync() {
     if (p.id === 'sacs-pvc' && !p.offersV1) { p.offersV1 = true; p.bundles = SACS_BUNDLES(); p.stock = 50; }
   });
 
+  // Guinea: price set by the owner (once)
+  db.products.forEach(function (p) {
+    if (p.id === 'sacs-pvc' && p.countryCode === 'GN' && !p.priceGnV1) { p.priceGnV1 = true; p.price = SACS_GN_PRICE; p.compare = Math.round(SACS_GN_PRICE * 1.5 / 1000) * 1000; }
+  });
+
+  // English-speaking countries: same offer, English copy, local prices (once per country)
+  Object.keys(SACS_EN_PRICES).forEach(function (code) {
+    const c = findCountry(code);
+    if (!c || c.sacsEnSeeded) return;
+    c.sacsEnSeeded = true;
+    if (findProduct(code, 'sacs-pvc')) return;
+    const price = SACS_EN_PRICES[code];
+    const cat = findCategory(code.toLowerCase() + '-home-kitchen') || categoriesOf(code)[0];
+    db.products.push({
+      id: 'sacs-pvc', countryCode: code, categoryId: cat ? cat.id : null, active: true, rich: false, offersV1: true, compareV1: true,
+      name: 'Pack of 2 clear PVC storage bags', nameFr: '',
+      description: 'Pack of 2 giant (38x24x32 cm) transparent PVC storage bags. Waterproof, rigid and foldable. Pay on delivery.', descriptionFr: '',
+      image: '', imageFr: '', colorOptions: false, gallery: [], sizesEnabled: false, sizes: ['S', 'M', 'L', 'XL'],
+      bundles: SACS_BUNDLES(['2 bags', '4 bags', '6 bags']), crossSellIds: [], landing: SACS_EN_LANDING(),
+      stock: 50, price: price, compare: Math.round(price * 1.5), shipping: 0, freeShippingQty: 1
+    });
+    added.push(code + ':sacs-pvc-en');
+  });
+
   // seed the "Pack de 2 sacs PVC" product once per country (never re-created if the admin deletes it)
   SACS_COUNTRIES.forEach(function (code) {
     const c = findCountry(code);
@@ -200,8 +242,8 @@ function startupSync() {
     if (findProduct(code, 'sacs-pvc')) return;
     const cur = GS.CURRENCIES[c.currency] || { rate: 655.957, step: 500 };
     const rate = Number(db.rates && db.rates[c.currency]) || cur.rate;
-    const compareP = cur.fixed ? SACS_COMPARE_CFA : Math.round(SACS_COMPARE_CFA / 655.957 * rate / cur.step) * cur.step;
-    const price = cur.fixed ? SACS_PRICE_CFA : Math.round(SACS_PRICE_CFA / 655.957 * rate / cur.step) * cur.step; // XOF/XAF: exactly 19999
+    const compareP = code === 'GN' ? Math.round(SACS_GN_PRICE * 1.5 / 1000) * 1000 : cur.fixed ? SACS_COMPARE_CFA : Math.round(SACS_COMPARE_CFA / 655.957 * rate / cur.step) * cur.step;
+    const price = code === 'GN' ? SACS_GN_PRICE : cur.fixed ? SACS_PRICE_CFA : Math.round(SACS_PRICE_CFA / 655.957 * rate / cur.step) * cur.step; // XOF/XAF: exactly 19999
     const cat = findCategory(code.toLowerCase() + '-home-kitchen') || categoriesOf(code)[0];
     db.products.push({
       id: 'sacs-pvc', countryCode: code, categoryId: cat ? cat.id : null, active: true, rich: false,
@@ -209,7 +251,7 @@ function startupSync() {
       description: 'Pack of 2 giant (38x24x32 cm) transparent PVC storage bags. Waterproof, rigid and foldable. Cash on delivery.',
       descriptionFr: 'Lot de 2 sacs de rangement géants (38x24x32 cm) en PVC épais, 100% transparents, étanches, rigides et pliables. Paiement à la livraison.',
       image: '', imageFr: '', colorOptions: false, gallery: [], sizesEnabled: false, sizes: ['S', 'M', 'L', 'XL'],
-      bundles: SACS_BUNDLES(), offersV1: true, crossSellIds: [],
+      bundles: SACS_BUNDLES(), offersV1: true, priceGnV1: true, crossSellIds: [],
       landing: SACS_LANDING(),
       stock: 50, price: price, compare: compareP, compareV1: true, shipping: 0, freeShippingQty: 1
     });
