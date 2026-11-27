@@ -62,7 +62,7 @@ const STARTER_COUNTRIES = ['CI', 'SN', 'GN']; // slugs come from TARGET_COUNTRIE
 // The SolarGlow landing page is sold only in these francophone countries
 const SOLARGLOW_COUNTRIES = ['CI', 'SN', 'GN'];
 // "Pack de 2 sacs PVC" landing page: all sub-Saharan francophone African countries. 19999 CFA = the reference price.
-const SACS_COUNTRIES = ['CI', 'SN', 'GN', 'CM', 'CF', 'TD', 'GA', 'CG', 'GQ', 'CD', 'ML', 'BF'];
+const SACS_COUNTRIES = ['CI', 'SN', 'CM', 'CF', 'TD', 'GA', 'CG', 'GQ', 'CD', 'ML', 'BF'];
 const SACS_PRICE_CFA = 19999;
 const SACS_COMPARE_CFA = 29999; // "usual price" shown crossed out
 // 3 offers (qty = number of packs of 2): 2 bags 19999, 4 bags 35999, 6 bags 47999 CFA, expressed as exact percentages off the unit price
@@ -76,7 +76,7 @@ function SACS_BUNDLES(labels) {
   ];
 }
 // English-speaking markets: local price of the pack of 2 (usual price = x1.5, same ratio as 29999 / 19999 CFA)
-const SACS_EN_PRICES = { TZ: 81999, KE: 3999, ZM: 699, UG: 13499, SS: 3999, GH: 359 };
+const SACS_EN_PRICES = { TZ: 81999, KE: 3999, ZM: 699, UG: 13499, SS: 3999, GH: 359, GN: 330000 };
 const SACS_GN_PRICE = 330000;
 // The French infographics carry their text inside the image, so the English page uses the same sections as text blocks.
 function SACS_EN_TEXT_LANDING() {
@@ -109,8 +109,9 @@ function SACS_EN_LANDING(code) {
   const m = [sacsMedia('en/pack-de-2'), sacsMedia('en/organisation'), sacsMedia('en/capacite-' + code)];
   return m.every(Boolean) ? sacsBlocks(m) : SACS_EN_TEXT_LANDING();
 }
+function sacsIsEn(code) { return Object.prototype.hasOwnProperty.call(SACS_EN_PRICES, code); }
 function sacsHasImages(code) {
-  return GS.isFrancophone(code) ? !!sacsMedia('fr/capacite-' + code) : !!(sacsMedia('en/pack-de-2') && sacsMedia('en/organisation') && sacsMedia('en/capacite-' + code));
+  return !sacsIsEn(code) ? !!sacsMedia('fr/capacite-' + code) : !!(sacsMedia('en/pack-de-2') && sacsMedia('en/organisation') && sacsMedia('en/capacite-' + code));
 } // only used to fill a brand-new, empty store
 // Target countries: each one is inserted at startup if it is missing (existing data is never touched). [code, URL slug]
 const TARGET_COUNTRIES = [
@@ -224,11 +225,22 @@ function startupSync() {
     if (p.id === 'sacs-pvc' && !p.offersV1) { p.offersV1 = true; p.bundles = SACS_BUNDLES(); p.stock = 50; }
   });
 
+  // Guinea now gets the English page: English copy and offer labels (once)
+  db.products.forEach(function (p) {
+    if (p.id === 'sacs-pvc' && p.countryCode === 'GN' && !p.enV1) {
+      p.enV1 = true; p.nameFr = ''; p.descriptionFr = '';
+      p.name = 'Pack of 2 clear PVC storage bags';
+      p.description = 'Pack of 2 giant (38x24x32 cm) transparent PVC storage bags. Waterproof, rigid and foldable. Pay on delivery.';
+      p.bundles = SACS_BUNDLES(['2 bags', '4 bags', '6 bags']);
+      p.landing = SACS_EN_LANDING('GN'); p.imgV2 = sacsHasImages('GN');
+    }
+  });
+
   // localized infographics available: use them (once per product)
   db.products.forEach(function (p) {
     if (p.id !== 'sacs-pvc' || p.imgV2 || !sacsHasImages(p.countryCode)) return;
     p.imgV2 = true;
-    p.landing = GS.isFrancophone(p.countryCode) ? SACS_LANDING(p.countryCode) : SACS_EN_LANDING(p.countryCode);
+    p.landing = sacsIsEn(p.countryCode) ? SACS_EN_LANDING(p.countryCode) : SACS_LANDING(p.countryCode);
   });
 
   // Guinea: price set by the owner (once)
@@ -245,7 +257,7 @@ function startupSync() {
     const price = SACS_EN_PRICES[code];
     const cat = findCategory(code.toLowerCase() + '-home-kitchen') || categoriesOf(code)[0];
     db.products.push({
-      id: 'sacs-pvc', countryCode: code, categoryId: cat ? cat.id : null, active: true, rich: false, offersV1: true, compareV1: true,
+      id: 'sacs-pvc', countryCode: code, categoryId: cat ? cat.id : null, active: true, rich: false, offersV1: true, compareV1: true, enV1: true, priceGnV1: true,
       name: 'Pack of 2 clear PVC storage bags', nameFr: '',
       description: 'Pack of 2 giant (38x24x32 cm) transparent PVC storage bags. Waterproof, rigid and foldable. Pay on delivery.', descriptionFr: '',
       image: '', imageFr: '', colorOptions: false, gallery: [], sizesEnabled: false, sizes: ['S', 'M', 'L', 'XL'],

@@ -4,8 +4,8 @@
  * The French originals live in public/media/sacs-pvc/{pack-de-2,organisation,capacite}.webp and carry their text inside the picture,
  * so each market needs its own images:
  *   en/pack-de-2, en/organisation          -> English (shared by all English-speaking countries)
- *   en/capacite-<CC>                       -> English + the local price (TZ KE ZM UG SS GH)
- *   fr/capacite-<CC>                       -> French + the local price (GN CD; the CFA price is baked in the original)
+ *   en/capacite-<CC>                       -> English + the local price (TZ KE ZM UG SS GH GN)
+ *   fr/capacite-<CC>                       -> French + the local price (CD; the CFA price is baked in the original)
  *
  * Usage (PowerShell):   $env:GEMINI_API_KEY = "..."; node scripts/translate-sacs-images.js
  * Options:              --only=en | --only=fr      --force (regenerate files that already exist)
@@ -22,8 +22,8 @@ const DIR = path.join(__dirname, '..', 'public', 'media', 'sacs-pvc');
 const only = (process.argv.find(function (a) { return a.startsWith('--only='); }) || '').split('=')[1];
 const force = process.argv.includes('--force');
 
-const EN_PRICES = { TZ: '81,999 TSh', KE: '3,999 KSh', ZM: '699 ZMW', UG: '13,499 USh', SS: '3,999 SSP', GH: '359 GHS' };
-const FR_PRICES = { GN: '330 000 GNF', CD: '88 500 FC' };
+const EN_PRICES = { TZ: '81,999 TSh', KE: '3,999 KSh', ZM: '699 ZMW', UG: '13,499 USh', SS: '3,999 SSP', GH: '359 GHS', GN: '330,000 GNF' };
+const FR_PRICES = { CD: '88 500 FC' };
 
 const STYLE = 'Keep the exact same layout, fonts, colors, photos, icons and style; change only the wording of the text. Numbers, symbols and measurements (38cm, 24cm, 32cm) stay as they are. Return the edited image.';
 function enPrompt(price) {
