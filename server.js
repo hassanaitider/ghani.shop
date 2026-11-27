@@ -76,7 +76,7 @@ function SACS_BUNDLES(labels) {
   ];
 }
 // English-speaking markets: local price of the pack of 2 (usual price = x1.5, same ratio as 29999 / 19999 CFA)
-const SACS_EN_PRICES = { TZ: 81999, KE: 3999, ZM: 699, UG: 13499, SS: 3999 };
+const SACS_EN_PRICES = { TZ: 81999, KE: 3999, ZM: 699, UG: 13499, SS: 3999, GH: 359 };
 const SACS_GN_PRICE = 330000;
 // The French infographics carry their text inside the image, so the English page uses the same sections as text blocks.
 function SACS_EN_LANDING() {
