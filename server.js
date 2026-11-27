@@ -1044,18 +1044,23 @@ function serveStatic(req, res, url) {
   }
   const file = path.normalize(path.join(PUBLIC, p));
   if (!file.startsWith(PUBLIC + path.sep)) return send(res, 403, 'Forbidden');
-  sendFile(req, res, file, path.extname(file).toLowerCase() === '.html' ? 'no-cache' : 'public, max-age=300');
+  sendFile(req, res, file, 'no-cache');
 }
 
 function sendFile(req, res, file, cache) {
   fs.stat(file, function (err, st) {
     if (err || !st.isFile()) return send(res, 404, 'Not found', { 'Content-Type': 'text/plain' });
     const ext = path.extname(file).toLowerCase();
+    const etag = 'W/"' + st.size.toString(16) + '-' + Math.floor(st.mtimeMs).toString(16) + '"';
+    if (cache === 'no-cache' && req.headers['if-none-match'] === etag) {
+      res.writeHead(304, Object.assign({ ETag: etag, 'Cache-Control': cache }, SEC_HEADERS));
+      return res.end();
+    }
     res.writeHead(200, Object.assign({
       'Content-Type': MIME[ext] || 'application/octet-stream',
       'Content-Length': st.size,
       'Cache-Control': cache
-    }, SEC_HEADERS));
+    }, cache === 'no-cache' ? { ETag: etag, 'Last-Modified': st.mtime.toUTCString() } : {}, SEC_HEADERS));
     if (req.method === 'HEAD') return res.end();
     fs.createReadStream(file).pipe(res);
   });
