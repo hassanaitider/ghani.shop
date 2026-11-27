@@ -79,7 +79,7 @@ function SACS_BUNDLES(labels) {
 const SACS_EN_PRICES = { TZ: 81999, KE: 3999, ZM: 699, UG: 13499, SS: 3999, GH: 359 };
 const SACS_GN_PRICE = 330000;
 // The French infographics carry their text inside the image, so the English page uses the same sections as text blocks.
-function SACS_EN_LANDING() {
+function SACS_EN_TEXT_LANDING() {
   const b = function (title, text) { return { title: title, text: text, media: '', titleFr: '', textFr: '', mediaFr: '' }; };
   return [
     b('PACK OF 2 BAGS: ZERO CLUTTER!', 'Double your storage capacity and protect your belongings from dust. Thanks to the 360° transparent design, find everything at a glance without unpacking a thing.\n\nDUO OFFER: 2 BAGS INCLUDED'),
@@ -93,10 +93,24 @@ function SACS_EN_LANDING() {
   ];
 }
 // the 3 photos, in this order, stacked on the product page
-function SACS_LANDING() {
-  return ['pack-de-2', 'organisation', 'capacite'].map(function (f) {
-    return { title: '', text: '', media: '/media/sacs-pvc/' + f + '.webp', titleFr: '', textFr: '', mediaFr: '' };
-  });
+// localized infographics produced by scripts/translate-sacs-images.js (en/..., fr/capacite-<CC>); '' when not generated yet
+function sacsMedia(rel) {
+  const ext = ['webp', 'png', 'jpg'].find(function (e) { return fs.existsSync(path.join(PUBLIC, 'media', 'sacs-pvc', rel + '.' + e)); });
+  return ext ? '/media/sacs-pvc/' + rel + '.' + ext : '';
+}
+function sacsBlocks(list) {
+  return list.map(function (u) { return { title: '', text: '', media: u, titleFr: '', textFr: '', mediaFr: '' }; });
+}
+function SACS_LANDING(code) {
+  return sacsBlocks(['/media/sacs-pvc/pack-de-2.webp', '/media/sacs-pvc/organisation.webp', (code && sacsMedia('fr/capacite-' + code)) || '/media/sacs-pvc/capacite.webp']);
+}
+// English markets: the same three infographics in English (last one carries the local price); text version until they exist
+function SACS_EN_LANDING(code) {
+  const m = [sacsMedia('en/pack-de-2'), sacsMedia('en/organisation'), sacsMedia('en/capacite-' + code)];
+  return m.every(Boolean) ? sacsBlocks(m) : SACS_EN_TEXT_LANDING();
+}
+function sacsHasImages(code) {
+  return GS.isFrancophone(code) ? !!sacsMedia('fr/capacite-' + code) : !!(sacsMedia('en/pack-de-2') && sacsMedia('en/organisation') && sacsMedia('en/capacite-' + code));
 } // only used to fill a brand-new, empty store
 // Target countries: each one is inserted at startup if it is missing (existing data is never touched). [code, URL slug]
 const TARGET_COUNTRIES = [
@@ -210,6 +224,13 @@ function startupSync() {
     if (p.id === 'sacs-pvc' && !p.offersV1) { p.offersV1 = true; p.bundles = SACS_BUNDLES(); p.stock = 50; }
   });
 
+  // localized infographics available: use them (once per product)
+  db.products.forEach(function (p) {
+    if (p.id !== 'sacs-pvc' || p.imgV2 || !sacsHasImages(p.countryCode)) return;
+    p.imgV2 = true;
+    p.landing = GS.isFrancophone(p.countryCode) ? SACS_LANDING(p.countryCode) : SACS_EN_LANDING(p.countryCode);
+  });
+
   // Guinea: price set by the owner (once)
   db.products.forEach(function (p) {
     if (p.id === 'sacs-pvc' && p.countryCode === 'GN' && !p.priceGnV1) { p.priceGnV1 = true; p.price = SACS_GN_PRICE; p.compare = Math.round(SACS_GN_PRICE * 1.5 / 1000) * 1000; }
@@ -228,7 +249,7 @@ function startupSync() {
       name: 'Pack of 2 clear PVC storage bags', nameFr: '',
       description: 'Pack of 2 giant (38x24x32 cm) transparent PVC storage bags. Waterproof, rigid and foldable. Pay on delivery.', descriptionFr: '',
       image: '', imageFr: '', colorOptions: false, gallery: [], sizesEnabled: false, sizes: ['S', 'M', 'L', 'XL'],
-      bundles: SACS_BUNDLES(['2 bags', '4 bags', '6 bags']), crossSellIds: [], landing: SACS_EN_LANDING(),
+      bundles: SACS_BUNDLES(['2 bags', '4 bags', '6 bags']), crossSellIds: [], landing: SACS_EN_LANDING(code), imgV2: sacsHasImages(code),
       stock: 50, price: price, compare: Math.round(price * 1.5), shipping: 0, freeShippingQty: 1
     });
     added.push(code + ':sacs-pvc-en');
@@ -252,7 +273,7 @@ function startupSync() {
       descriptionFr: 'Lot de 2 sacs de rangement géants (38x24x32 cm) en PVC épais, 100% transparents, étanches, rigides et pliables. Paiement à la livraison.',
       image: '', imageFr: '', colorOptions: false, gallery: [], sizesEnabled: false, sizes: ['S', 'M', 'L', 'XL'],
       bundles: SACS_BUNDLES(), offersV1: true, priceGnV1: true, crossSellIds: [],
-      landing: SACS_LANDING(),
+      landing: SACS_LANDING(code), imgV2: sacsHasImages(code),
       stock: 50, price: price, compare: compareP, compareV1: true, shipping: 0, freeShippingQty: 1
     });
     added.push(code + ':sacs-pvc');
